@@ -22,6 +22,7 @@ import { BG_ENV } from "../helpers/BG_ENV"
 import { update } from "@tweenjs/tween.js"
 import { TextureLoader } from "three"
 import { TEXTURES_LIST } from "../textures/TEXTURES_LIST"
+import { HDRI_LIST } from "../hdri/HDRI_LIST"
 
 let stats,
   renderer,
@@ -64,7 +65,7 @@ export default async function ThicknessDemo(mainGui) {
     0.1,
     150
   )
-  camera.position.set(0.2, 0.2, 0.2)
+  camera.position.set(3, 2, 3)
   camera.name = "Camera"
   // scene
   scene = new Scene()
@@ -77,7 +78,7 @@ export default async function ThicknessDemo(mainGui) {
   controls.minDistance = 0.1
   controls.maxDistance = 100
   controls.maxPolarAngle = Math.PI / 1.5
-  controls.target.set(0, 0.08, 0)
+  controls.target.set(0, 1, 0)
 
   transformControls = new TransformControls(camera, renderer.domElement)
   transformControls.addEventListener("dragging-changed", (event) => {
@@ -111,6 +112,7 @@ export default async function ThicknessDemo(mainGui) {
 
   sceneGui.add(transformControls, "mode", ["translate", "rotate", "scale"])
   const bg_env = new BG_ENV(scene)
+  bg_env.preset = HDRI_LIST.dry_cracked_lake
   bg_env.setBGType("GroundProjection")
   bg_env.setEnvType("HDRI")
   bg_env.updateAll()
