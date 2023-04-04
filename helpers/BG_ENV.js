@@ -13,6 +13,8 @@ import {
   TextureLoader,
   sRGBEncoding,
   LinearFilter,
+  DirectionalLightHelper,
+  MeshStandardMaterial,
 } from "three"
 import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader"
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader"
@@ -69,7 +71,7 @@ export class BG_ENV {
 
     this.bgColor = new Color("#ffffff")
 
-    this.sunEnabled
+    this.sunEnabled = false
     this.sunPivot
     this.sunLight
     this.sunPos = new Vector3(1, 1, 1)
@@ -104,16 +106,17 @@ export class BG_ENV {
       this.sunLight.castShadow = true
       this.sunLight.shadow.camera.near = 0.1
       this.sunLight.shadow.camera.far = 50
-      this.sunLight.shadow.camera.right = 15
-      this.sunLight.shadow.camera.left = -15
-      this.sunLight.shadow.camera.top = 15
-      this.sunLight.shadow.camera.bottom = -15
+      const size = 10
+      this.sunLight.shadow.camera.right = size
+      this.sunLight.shadow.camera.left = -size
+      this.sunLight.shadow.camera.top = size
+      this.sunLight.shadow.camera.bottom = -size
       this.sunLight.shadow.mapSize.width = 1024
       this.sunLight.shadow.mapSize.height = 1024
       this.sunLight.shadow.radius = 1.95
       this.sunLight.shadow.blurSamples = 6
-      sunLight.shadow.bias = -0.0005
-      this.sunPivot.add(sunLight)
+      this.sunLight.shadow.bias = -0.0005
+      this.sunPivot.add(this.sunLight)
     }
 
     //   floor
@@ -175,6 +178,10 @@ export class BG_ENV {
       }
     })
 
+    if (this.sunEnabled) {
+      folder.add(this.sunLight, "intensity", 0, 10)
+    }
+
     return folder
   }
 
@@ -187,7 +194,10 @@ export class BG_ENV {
     this.init()
     // console.log(this)
 
-    await Promise.all([this.downloadEnvironment(data), this.downloadBackground(data)])
+    await Promise.all([
+      this.downloadEnvironment(data),
+      this.downloadBackground(data),
+    ])
 
     this.scene.environment = this.envTexture
 
@@ -237,6 +247,28 @@ export class BG_ENV {
         }
       }
     }
+
+    if (this.sunEnabled) {
+      if (!this.sunPivot.parent) {
+        this.scene.add(this.sunPivot)
+        this.sunLight.position.fromArray(data.sunPos || [3, 3, 3])
+      }
+    } else {
+      if (this.sunPivot.parent) {
+        this.sunPivot.removeFromParent()
+      }
+    }
+
+    if (this.shadowFloorEnabled) {
+      if (!this.shadowFloor.parent) {
+        this.scene.add(this.shadowFloor)
+        console.log(this.shadowFloor)
+      }
+    } else {
+      if (this.shadowFloor.parent) {
+        this.shadowFloor.removeFromParent()
+      }
+    }
   }
 
   /**
@@ -253,7 +285,9 @@ export class BG_ENV {
 
     let texture = this.envCache[key]
     if (!texture) {
-      texture = exr ? await exrLoader.loadAsync(key) : await rgbeLoader.loadAsync(key)
+      texture = exr
+        ? await exrLoader.loadAsync(key)
+        : await rgbeLoader.loadAsync(key)
       this.envCache[key] = texture
       texture.mapping = EquirectangularReflectionMapping
     }
@@ -263,7 +297,12 @@ export class BG_ENV {
 
   async downloadBackground({ webP, avif } = {}) {
     const key = webP || avif
-    if (!(this.backgroundType === BG_OPTIONS.Default || this.backgroundType === BG_OPTIONS.GroundProjection)) {
+    if (
+      !(
+        this.backgroundType === BG_OPTIONS.Default ||
+        this.backgroundType === BG_OPTIONS.GroundProjection
+      )
+    ) {
       this.bgTexture = null
       return
     }
@@ -319,7 +358,9 @@ export class BG_ENV {
     }
 
     if (envDict.webP || envDict.avif) {
-      const texture = await textureLoader.loadAsync(envDict.webP || envDict.avif)
+      const texture = await textureLoader.loadAsync(
+        envDict.webP || envDict.avif
+      )
       texture.mapping = EquirectangularReflectionMapping
       texture.encoding = sRGBEncoding
       scene.background = texture

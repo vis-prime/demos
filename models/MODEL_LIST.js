@@ -22,10 +22,13 @@ export const MODEL_LIST = {
     url: wallUrl,
   },
   horse: {
+    name: "Horse",
     url: horseUrl,
   },
   aztec: {
+    name: "Aztec",
     url: aztecUrl,
+    attribution: `"Aztec Statue Sculpt" (https://skfb.ly/6SIEP) by POLYCOSM is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).`,
   },
 }
 

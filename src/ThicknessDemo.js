@@ -113,13 +113,15 @@ export default async function ThicknessDemo(mainGui) {
   sceneGui.add(transformControls, "mode", ["translate", "rotate", "scale"])
   const bg_env = new BG_ENV(scene)
   bg_env.preset = HDRI_LIST.dry_cracked_lake
-  bg_env.setBGType("GroundProjection")
+  bg_env.sunEnabled = true
+  bg_env.shadowFloorEnabled = true
+
+  // bg_env.setBGType("Color")
   bg_env.setEnvType("HDRI")
   bg_env.updateAll()
   bg_env.addGui(sceneGui)
 
-  // await setupBoba()
-  //   await setupWall()
+  transformControls.attach(bg_env.sunLight)
   await setupModels()
 
   animate()
@@ -306,12 +308,15 @@ async function setupWall() {
 
 async function setupModels() {
   const ModelList = {
-    Aztec: MODEL_LIST.aztec.url,
-    Horse: MODEL_LIST.horse.url,
+    Aztec: MODEL_LIST.aztec,
+    Horse: MODEL_LIST.horse,
   }
   const params = {
     model: ModelList.Aztec,
   }
+  const folder = gui.addFolder("Thiccccc")
+  folder.open()
+  let modelFolder
 
   async function loadModel() {
     const disposeItems = {}
@@ -335,11 +340,91 @@ async function setupModels() {
 
     mainObjects.clear()
 
-    const gltf = await MODEL_LOADER(params.model)
+    const gltf = await MODEL_LOADER(params.model.url)
     mainObjects.add(gltf.scene)
+    const model = gltf.scene
+
+    if (modelFolder) modelFolder.destroy()
+    modelFolder = folder.addFolder(params.model.name)
+    modelFolder.open()
+    let transmissionMaterials = {}
+    model.traverse((node) => {
+      if (node.isMesh) {
+        node.receiveShadow = true
+        node.castShadow = true
+      }
+      if (node.material && !transmissionMaterials[node.material.uuid]) {
+        transmissionMaterials[node.material.uuid] = node.material
+      }
+    })
+
+    for (const mat of Object.values(transmissionMaterials)) {
+      const mFol = modelFolder.addFolder(mat.name)
+
+      const texParams = {}
+      const texDict = {}
+      for (const key of Object.keys(mat)) {
+        if (mat[key]?.isTexture) {
+          texDict[key] = mat[key]
+          texParams[key] = true
+        }
+      }
+
+      function makeTextureToggleButton(gui, channel) {
+        if (texParams[channel])
+          gui.add(texParams, channel).onChange((v) => {
+            mat[channel] = v ? texDict[channel] : null
+            mat.needsUpdate = true
+            console.log(channel, mat[channel])
+          })
+      }
+
+      console.log({ texParams, texDict })
+
+      mFol.addColor(mat, "color")
+
+      mFol.add(mat, "roughness", 0, 1)
+      makeTextureToggleButton(mFol, "roughnessMap")
+      mFol.add(mat, "metalness", 0, 1)
+      makeTextureToggleButton(mFol, "metalnessMap")
+
+      mFol.add(mat, "aoMapIntensity", 0, 1)
+      makeTextureToggleButton(mFol, "aoMap")
+      makeTextureToggleButton(mFol, "normalMap")
+
+      if (mat.isMeshPhysicalMaterial) {
+        console.log({ mat })
+        mFol.open()
+        const tFol = mFol.addFolder("Transmission stuff")
+        tFol.add(mat, "transmission", 0, 1)
+        makeTextureToggleButton(tFol, "transmissionMap")
+        tFol.add(mat, "thickness", 0, 10)
+        makeTextureToggleButton(tFol, "thicknessMap")
+        tFol.addColor(mat, "attenuationColor")
+        tFol.add(mat, "attenuationDistance", 0, 1)
+        tFol.add(mat, "reflectivity", 0, 1)
+        const cFol = mFol.addFolder("Clearcoat stuff")
+        cFol.add(mat, "clearcoat", 0, 1)
+        cFol.add(mat, "clearcoatRoughness", 0, 1)
+
+        const sFol = mFol.addFolder("Sheen stuff")
+        sFol.add(mat, "sheen", 0, 1)
+        sFol.add(mat, "sheenRoughness", 0, 1)
+        sFol.addColor(mat, "sheenColor")
+
+        const spFol = mFol.addFolder("Specular stuff")
+        spFol.add(mat, "specularIntensity", 0, 1)
+        spFol.addColor(mat, "specularColor")
+
+        const iFol = mFol.addFolder("Iridescence stuff")
+        iFol.add(mat, "iridescence", 0, 1)
+        iFol.add(mat, "iridescenceIOR", 0, 1)
+        // iFol.add(mat.iridescenceThicknessRange, "0")
+        iFol.add(mat.iridescenceThicknessRange, "1", 0, 1000).name("Range[1]")
+      }
+    }
   }
 
-  const folder = gui.addFolder("Thiccccc")
   folder.add(params, "model", ModelList).onChange(loadModel)
 
   loadModel()
