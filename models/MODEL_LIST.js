@@ -4,6 +4,7 @@ import bobaUrl from "./boba_comp.glb?url"
 import wallUrl from "./thickness_wall_comp.glb?url"
 import horseUrl from "./horse_comp.glb?url"
 import aztecUrl from "./aztec_pole_2k_comp.glb?url"
+import catUrl from "./cat_2k_comp.glb?url"
 
 const gltfLoader = new GLTFLoader()
 const draco = new DRACOLoader()
@@ -29,6 +30,10 @@ export const MODEL_LIST = {
     name: "Aztec",
     url: aztecUrl,
     attribution: `"Aztec Statue Sculpt" (https://skfb.ly/6SIEP) by POLYCOSM is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).`,
+  },
+  cat: {
+    name: "cat",
+    url: catUrl,
   },
 }
 

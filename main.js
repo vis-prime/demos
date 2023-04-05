@@ -5,6 +5,7 @@ import { version } from "./package.json"
 import ThicknessDemo from "./src/ThicknessDemo"
 
 const gui = new GUI({ title: "Demos: " + version, closeFolders: true })
+
 const params = {
   demo: null,
 }
@@ -15,8 +16,14 @@ const demos = {
   },
   Thickness: ThicknessDemo,
 }
+
+if (Object.keys(demos).includes(window.location.hash.substring(1))) {
+  params.demo = window.location.hash.substring(1)
+}
+
 gui.add(params, "demo", Object.keys(demos)).onChange((v) => {
-  router.navigateTo(v)
+  router.redirectTo(v)
+  location.reload()
 })
 
 var router = new Router({
@@ -31,4 +38,3 @@ for (const [demoName, demoFunc] of Object.entries(demos)) {
 }
 
 router.check()
-router.addUriListener()

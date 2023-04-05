@@ -14,12 +14,15 @@ import {
   Group,
   VSMShadowMap,
   MeshPhysicalMaterial,
+  Box3,
+  Vector3,
+  MathUtils,
 } from "three"
 
 // Model and Env
 import { MODEL_LIST, MODEL_LOADER } from "../models/MODEL_LIST"
 import { BG_ENV } from "../helpers/BG_ENV"
-import { update } from "@tweenjs/tween.js"
+import { Easing, Tween, update } from "@tweenjs/tween.js"
 import { TextureLoader } from "three"
 import { TEXTURES_LIST } from "../textures/TEXTURES_LIST"
 import { HDRI_LIST } from "../hdri/HDRI_LIST"
@@ -310,6 +313,7 @@ async function setupModels() {
   const ModelList = {
     Aztec: MODEL_LIST.aztec,
     Horse: MODEL_LIST.horse,
+    Cat: MODEL_LIST.cat,
   }
   const params = {
     model: ModelList.Aztec,
@@ -358,6 +362,14 @@ async function setupModels() {
       }
     })
 
+    fitModelInViewport(model)
+    const test = {
+      fit: () => {
+        fitModelInViewport(model)
+      },
+    }
+    modelFolder.add(test, "fit")
+
     for (const mat of Object.values(transmissionMaterials)) {
       const mFol = modelFolder.addFolder(mat.name)
 
@@ -375,7 +387,7 @@ async function setupModels() {
           gui.add(texParams, channel).onChange((v) => {
             mat[channel] = v ? texDict[channel] : null
             mat.needsUpdate = true
-            console.log(channel, mat[channel])
+            console.log(channel, v)
           })
       }
 
@@ -428,4 +440,47 @@ async function setupModels() {
   folder.add(params, "model", ModelList).onChange(loadModel)
 
   loadModel()
+}
+
+const bbox = new Box3()
+const center = new Vector3()
+const size = new Vector3()
+const endPos = new Vector3()
+const endTar = new Vector3()
+function fitModelInViewport(model) {
+  // calculate the bounding box of the mesh
+  bbox.setFromObject(model, true)
+
+  // calculate the center of the bounding box
+  bbox.getCenter(center)
+
+  // calculate the distance to move the camera back based on the mesh size
+  bbox.getSize(size)
+  const maxDim = Math.max(size.x, size.y, size.z)
+  let distance = maxDim / (2 * Math.tan(MathUtils.degToRad(camera.fov) / 2))
+  distance = distance + distance * 0.1
+  // move the camera to look at the center of the mesh
+
+  const campos = camera.position.clone()
+  campos.y = center.y
+  endPos.lerpVectors(
+    center,
+    campos,
+    1 / (center.distanceTo(camera.position) / distance)
+  )
+
+  console.log(endPos.distanceTo(center), distance)
+  endTar.copy(center)
+
+  new Tween(camera.position)
+    .to(endPos)
+    .duration(1000)
+    .easing(Easing.Quadratic.InOut)
+    .start()
+
+  new Tween(controls.target)
+    .to(endTar)
+    .duration(1000)
+    .easing(Easing.Quadratic.InOut)
+    .start()
 }
