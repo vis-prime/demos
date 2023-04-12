@@ -26,7 +26,9 @@ import { Easing, Tween, update } from "@tweenjs/tween.js"
 import { TextureLoader } from "three"
 import { TEXTURES_LIST } from "../textures/TEXTURES_LIST"
 import { HDRI_LIST } from "../hdri/HDRI_LIST"
-
+import { CurveHandler } from "../helpers/CurveHandler"
+const blender_docs =
+  "https://docs.blender.org/manual/en/3.5/addons/import_export/scene_gltf2.html"
 let stats,
   renderer,
   raf,
@@ -45,6 +47,10 @@ gltfLoader.setDRACOLoader(draco)
 const raycaster = new Raycaster()
 const intersects = [] //raycast
 let sceneGui
+/**
+ * @type {BG_ENV}
+ */
+let bg_env
 
 export default async function ThicknessDemo(mainGui) {
   gui = mainGui
@@ -59,6 +65,7 @@ export default async function ThicknessDemo(mainGui) {
   renderer.shadowMap.type = VSMShadowMap
   renderer.outputEncoding = sRGBEncoding
   renderer.toneMapping = ACESFilmicToneMapping
+
   app.appendChild(renderer.domElement)
 
   // camera
@@ -73,6 +80,9 @@ export default async function ThicknessDemo(mainGui) {
   // scene
   scene = new Scene()
   scene.add(mainObjects)
+
+  // custom vector to perform focus
+  scene.focus = new Vector3()
 
   // controls
   controls = new OrbitControls(camera, renderer.domElement)
@@ -114,20 +124,46 @@ export default async function ThicknessDemo(mainGui) {
   })
 
   sceneGui.add(transformControls, "mode", ["translate", "rotate", "scale"])
-  const bg_env = new BG_ENV(scene)
-  bg_env.preset = HDRI_LIST.dry_cracked_lake
+  bg_env = new BG_ENV(scene)
   bg_env.sunEnabled = true
   bg_env.shadowFloorEnabled = true
-
-  // bg_env.setBGType("Color")
   bg_env.setEnvType("HDRI")
-  bg_env.updateAll()
   bg_env.addGui(sceneGui)
 
-  transformControls.attach(bg_env.sunLight)
   await setupModels()
 
   animate()
+
+  let lastClickTime = 0
+  let lastPointerEvent = null
+
+  function handlePointerDown(event) {
+    const clickTime = new Date().getTime()
+    const timeDiff = clickTime - lastClickTime
+    if (
+      lastPointerEvent !== null &&
+      timeDiff < 500 &&
+      calculateDistance(
+        lastPointerEvent.clientX,
+        lastPointerEvent.clientY,
+        event.clientX,
+        event.clientY
+      ) < 10
+    ) {
+      // Double click detected
+      console.log("Double click detected!")
+      fitModelInViewport(mainObjects)
+    }
+    lastPointerEvent = event
+    lastClickTime = clickTime
+  }
+
+  function calculateDistance(x1, y1, x2, y2) {
+    return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2))
+  }
+
+  const targetElement = app
+  targetElement.addEventListener("pointerdown", handlePointerDown)
 }
 
 function onWindowResize() {
@@ -310,46 +346,81 @@ async function setupWall() {
 }
 
 async function setupModels() {
-  const ModelList = {
-    Aztec: MODEL_LIST.aztec,
-    Horse: MODEL_LIST.horse,
-    Cat: MODEL_LIST.cat,
+  const curveHandler = new CurveHandler(scene, camera, controls, renderer)
+  // curveHandler.addGui(gui)
+  const ModelData = {
+    Aztec: {
+      name: MODEL_LIST.aztec.name,
+      url: MODEL_LIST.aztec.url,
+      model: null,
+      hdri: HDRI_LIST.wide_street2,
+    },
+    Demon: {
+      name: MODEL_LIST.crowned_demon.name,
+      url: MODEL_LIST.crowned_demon.url,
+      model: null,
+      hdri: HDRI_LIST.wide_street1,
+    },
+    Cat: {
+      name: MODEL_LIST.cat.name,
+      url: MODEL_LIST.cat.url,
+      model: null,
+      hdri: HDRI_LIST.dancing_hall,
+    },
+    Mourner: {
+      name: MODEL_LIST.mourner.name,
+      url: MODEL_LIST.mourner.url,
+      model: null,
+      hdri: HDRI_LIST.round_platform,
+    },
   }
+
   const params = {
-    model: ModelList.Aztec,
+    model: ModelData.Aztec,
   }
+
   const folder = gui.addFolder("Thiccccc")
   folder.open()
   let modelFolder
 
   async function loadModel() {
-    const disposeItems = {}
-    mainObjects.traverse((node) => {
-      if (node.geometry) {
-        disposeItems[node.uuid] = node.geometry
-      }
-      if (node.material) {
-        disposeItems[node.material.uuid] = node.material
-        for (const val of Object.values(node.material)) {
-          if (val?.isTexture) {
-            disposeItems[val.uuid] = val
-          }
-        }
-      }
-    })
-    console.log("reload", disposeItems)
-    for (const garbage of Object.values(disposeItems)) {
-      garbage.dispose()
+    mainObjects.clear()
+    const data = params.model
+    let model, modelPromise
+    if (!data.model) {
+      modelPromise = MODEL_LOADER(data.url).then((gltf) => {
+        data.model = gltf.scene
+      })
     }
 
-    mainObjects.clear()
+    let bgEnvPromise
+    if (data.hdri) {
+      bg_env.preset = data.hdri
+      bgEnvPromise = bg_env.updateAll()
+    }
 
-    const gltf = await MODEL_LOADER(params.model.url)
-    mainObjects.add(gltf.scene)
-    const model = gltf.scene
+    await Promise.all([modelPromise, bgEnvPromise])
+    model = data.model
+    console.log({ modelPromise, bgEnvPromise })
+    mainObjects.add(model)
+
+    await renderer.compile(scene, camera)
+
+    setTimeout(() => {
+      if (IntroCurves[data.name]) {
+        //first camera use current pos
+        camera.position.toArray(IntroCurves[data.name][0].position)
+        controls.target.toArray(IntroCurves[data.name][0].target)
+        IntroCurves[data.name][0].fov = camera.fov
+        curveHandler.loadPreset(IntroCurves[data.name])
+        curveHandler.play()
+      } else {
+        fitModelInViewport(mainObjects)
+      }
+    }, 100)
 
     if (modelFolder) modelFolder.destroy()
-    modelFolder = folder.addFolder(params.model.name)
+    modelFolder = folder.addFolder(data.name)
     modelFolder.open()
     let transmissionMaterials = {}
     model.traverse((node) => {
@@ -362,7 +433,6 @@ async function setupModels() {
       }
     })
 
-    fitModelInViewport(model)
     const test = {
       fit: () => {
         fitModelInViewport(model)
@@ -437,7 +507,7 @@ async function setupModels() {
     }
   }
 
-  folder.add(params, "model", ModelList).onChange(loadModel)
+  folder.add(params, "model", ModelData).onChange(loadModel)
 
   loadModel()
 }
@@ -447,25 +517,23 @@ const center = new Vector3()
 const size = new Vector3()
 const endPos = new Vector3()
 const endTar = new Vector3()
+const shiftedCameraPos = new Vector3()
+
 function fitModelInViewport(model) {
-  // calculate the bounding box of the mesh
   bbox.setFromObject(model, true)
-
-  // calculate the center of the bounding box
   bbox.getCenter(center)
-
-  // calculate the distance to move the camera back based on the mesh size
   bbox.getSize(size)
-  const maxDim = Math.max(size.x, size.y, size.z)
-  let distance = maxDim / (2 * Math.tan(MathUtils.degToRad(camera.fov) / 2))
-  distance = distance + distance * 0.1
+
+  let distance = size.length() / Math.tan(MathUtils.degToRad(camera.fov) / 2)
+  distance -= distance * 0.3
   // move the camera to look at the center of the mesh
 
-  const campos = camera.position.clone()
-  campos.y = center.y
+  shiftedCameraPos.copy(camera.position)
+  shiftedCameraPos.y = center.y
+
   endPos.lerpVectors(
     center,
-    campos,
+    shiftedCameraPos,
     1 / (center.distanceTo(camera.position) / distance)
   )
 
@@ -483,4 +551,49 @@ function fitModelInViewport(model) {
     .duration(1000)
     .easing(Easing.Quadratic.InOut)
     .start()
+}
+
+const IntroCurves = {
+  [MODEL_LIST.aztec.name]: [
+    {
+      position: [3.3071321443089925, 1.388944390019785, 3.307132144799106],
+      target: [
+        -1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8,
+      ],
+      fov: 50,
+      focus: [0, 0, 0],
+    },
+    {
+      position: [-1.7303892445874622, 1.3344887086602903, 2.200999081476231],
+      target: [
+        -1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8,
+      ],
+      fov: 90,
+      focus: [0, 0, 0],
+    },
+    {
+      position: [-1.6896684397735617, 3.5239462707277447, -2.79920023168043],
+      target: [
+        -1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8,
+      ],
+      fov: 40,
+      focus: [0, 0, 0],
+    },
+    {
+      position: [2.4755038102622025, 1.761564273787293, -2.545411150778058],
+      target: [
+        -1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8,
+      ],
+      fov: 20,
+      focus: [0, 0, 0],
+    },
+    {
+      position: [0.5324308158242546, 1.3889240952517157, 4.527657651483493],
+      target: [
+        -1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8,
+      ],
+      fov: 50,
+      focus: [0, 0, 0],
+    },
+  ],
 }

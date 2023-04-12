@@ -4,7 +4,10 @@ import Router from "vanilla-router"
 import { version } from "./package.json"
 import ThicknessDemo from "./src/ThicknessDemo"
 
-const gui = new GUI({ title: "Demos: " + version, closeFolders: true })
+const gui = new GUI({ title: "Demos: v" + version, closeFolders: true })
+if (window.innerWidth < window.innerHeight) {
+  gui.close()
+}
 
 const params = {
   demo: null,
@@ -30,6 +33,8 @@ var router = new Router({
   mode: "hash",
   page404: (path) => {
     console.log('"/' + path + '" Page not found')
+    router.redirectTo("Home")
+    location.reload()
   },
 })
 

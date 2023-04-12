@@ -15,6 +15,7 @@ import {
   LinearFilter,
   DirectionalLightHelper,
   MeshStandardMaterial,
+  AxesHelper,
 } from "three"
 import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader"
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader"
@@ -74,6 +75,7 @@ export class BG_ENV {
     this.sunEnabled = false
     this.sunPivot
     this.sunLight
+    this.sunLightIntensity = 1
     this.sunPos = new Vector3(1, 1, 1)
     this.sunColor = new Color("#ffffff")
 
@@ -122,7 +124,7 @@ export class BG_ENV {
     //   floor
     if (this.shadowFloorEnabled && !this.shadowFloor) {
       this.shadowFloor = new Mesh(
-        new PlaneGeometry(10, 10).rotateX(-Math.PI / 2),
+        new PlaneGeometry(20, 20).rotateX(-Math.PI / 2),
         new ShadowMaterial({ opacity: this.shadowOpacity })
       )
       this.shadowFloor.name = "shadow_floor"
@@ -179,7 +181,9 @@ export class BG_ENV {
     })
 
     if (this.sunEnabled) {
-      folder.add(this.sunLight, "intensity", 0, 10)
+      folder.add(this, "sunLightIntensity", 0, 10).onChange((v) => {
+        if (this.sunLight) this.sunLight.intensity = v
+      })
     }
 
     return folder
@@ -190,85 +194,108 @@ export class BG_ENV {
    * @param {HDRI_LIST} data
    */
   async updateAll() {
-    const data = this.preset
-    this.init()
-    // console.log(this)
+    return new Promise(async (resolve) => {
+      const data = this.preset
+      this.init()
+      // console.log(this)
 
-    await Promise.all([
-      this.downloadEnvironment(data),
-      this.downloadBackground(data),
-    ])
+      await Promise.all([
+        this.downloadEnvironment(data),
+        this.downloadBackground(data),
+      ])
 
-    this.scene.environment = this.envTexture
+      this.scene.environment = this.envTexture
 
-    if (!this.bgTexture) {
-      this.scene.background = null
-      if (this.backgroundType === BG_OPTIONS.Color) {
-        this.scene.background = this.bgColor
-      }
-    }
-
-    if (this.backgroundType === BG_OPTIONS.GroundProjection && this.bgTexture) {
-      this.scene.background = null
-
-      if (!this.groundProjectedSkybox) {
-        this.groundProjectedSkybox = new GroundProjectedSkybox(this.bgTexture)
-        this.groundProjectedSkybox.scale.setScalar(100)
-      }
-
-      if (data.groundProj.radius) this.gpRadius = data.groundProj.radius
-
-      if (data.groundProj.height) this.gpHeight = data.groundProj.height
-      this.bgTexture.minFilter = LinearFilter
-      this.groundProjectedSkybox.material.uniforms.map.value = this.bgTexture
-      this.groundProjectedSkybox.radius = this.gpRadius
-      this.groundProjectedSkybox.height = this.gpHeight
-
-      this.scene.add(this.groundProjectedSkybox)
-    } else {
-      if (this.groundProjectedSkybox?.parent) {
-        this.groundProjectedSkybox.removeFromParent()
-      }
-
-      switch (this.backgroundType) {
-        case BG_OPTIONS.Default: {
-          this.scene.background = this.bgTexture
-          break
-        }
-
-        case BG_OPTIONS.Color: {
+      if (!this.bgTexture) {
+        this.scene.background = null
+        if (this.backgroundType === BG_OPTIONS.Color) {
           this.scene.background = this.bgColor
-          break
-        }
-
-        default: {
-          this.scene.background = null
-          break
         }
       }
-    }
 
-    if (this.sunEnabled) {
-      if (!this.sunPivot.parent) {
-        this.scene.add(this.sunPivot)
-        this.sunLight.position.fromArray(data.sunPos || [3, 3, 3])
-      }
-    } else {
-      if (this.sunPivot.parent) {
-        this.sunPivot.removeFromParent()
-      }
-    }
+      if (
+        this.backgroundType === BG_OPTIONS.GroundProjection &&
+        this.bgTexture
+      ) {
+        this.scene.background = null
 
-    if (this.shadowFloorEnabled) {
-      if (!this.shadowFloor.parent) {
-        this.scene.add(this.shadowFloor)
-        console.log(this.shadowFloor)
+        if (!this.groundProjectedSkybox) {
+          this.groundProjectedSkybox = new GroundProjectedSkybox(this.bgTexture)
+          this.groundProjectedSkybox.scale.setScalar(100)
+        }
+
+        if (data.groundProj.radius) this.gpRadius = data.groundProj.radius
+
+        if (data.groundProj.height) this.gpHeight = data.groundProj.height
+        this.bgTexture.minFilter = LinearFilter
+        this.groundProjectedSkybox.material.uniforms.map.value = this.bgTexture
+        this.groundProjectedSkybox.radius = this.gpRadius
+        this.groundProjectedSkybox.height = this.gpHeight
+
+        this.scene.add(this.groundProjectedSkybox)
+      } else {
+        if (this.groundProjectedSkybox?.parent) {
+          this.groundProjectedSkybox.removeFromParent()
+        }
+
+        switch (this.backgroundType) {
+          case BG_OPTIONS.Default: {
+            this.scene.background = this.bgTexture
+            break
+          }
+
+          case BG_OPTIONS.Color: {
+            this.scene.background = this.bgColor
+            break
+          }
+
+          default: {
+            this.scene.background = null
+            break
+          }
+        }
       }
-    } else {
-      if (this.shadowFloor.parent) {
-        this.shadowFloor.removeFromParent()
+
+      if (this.sunEnabled) {
+        if (!this.sunPivot.parent) {
+          this.scene.add(this.sunPivot)
+        }
+
+        if (data.sunPos) {
+          this.sunLight.position.fromArray(data.sunPos)
+        } else {
+          this.sunLight.position.set(3, 3, 3)
+        }
+
+        if (!data.sunColor) {
+          this.sunLight.color.set(data.sunColor)
+        } else {
+          this.sunLight.color.set("white")
+        }
+      } else {
+        if (this.sunPivot.parent) {
+          this.sunPivot.removeFromParent()
+        }
       }
-    }
+
+      if (this.shadowFloorEnabled) {
+        if (!this.shadowFloor.parent) {
+          this.scene.add(this.shadowFloor)
+          console.log(this.shadowFloor)
+        }
+        if (!data.shadowOpacity) {
+          this.shadowFloor.material.opacity = data.shadowOpacity
+        } else {
+          this.shadowFloor.material.opacity = 0.5
+        }
+      } else {
+        if (this.shadowFloor.parent) {
+          this.shadowFloor.removeFromParent()
+        }
+      }
+
+      resolve()
+    })
   }
 
   /**

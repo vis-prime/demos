@@ -64,6 +64,9 @@ export const HDRI_LIST = {
     exr: round_platform_exr,
     avif: round_platform_avif,
     groundProj: { radius: 10, height: 2.5 },
+    sunPos: [0, 8, 0],
+    sunColor: "#ffffeb",
+    shadowOpacity: 0.7,
   },
 
   skidpan: {
@@ -76,6 +79,9 @@ export const HDRI_LIST = {
     avif: dancing_avif,
     exr: dancing_exr,
     groundProj: { radius: 20, height: 3 },
+    sunPos: [0, 8, 0],
+    sunColor: "#ffffeb",
+    shadowOpacity: 0.55,
   },
   empty_warehouse: {
     avif: empty_warehouse_avif,

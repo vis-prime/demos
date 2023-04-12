@@ -5,6 +5,8 @@ import wallUrl from "./thickness_wall_comp.glb?url"
 import horseUrl from "./horse_comp.glb?url"
 import aztecUrl from "./aztec_pole_2k_comp.glb?url"
 import catUrl from "./cat_2k_comp.glb?url"
+import mournerUrl from "./mourner_2k_comp.glb?url"
+import demonUrl from "./crowned_demon_2k_comp.glb?url"
 
 const gltfLoader = new GLTFLoader()
 const draco = new DRACOLoader()
@@ -34,6 +36,14 @@ export const MODEL_LIST = {
   cat: {
     name: "cat",
     url: catUrl,
+  },
+  mourner: {
+    name: "mourner",
+    url: mournerUrl,
+  },
+  crowned_demon: {
+    name: "Crowned Demon bust",
+    url: demonUrl,
   },
 }
 
