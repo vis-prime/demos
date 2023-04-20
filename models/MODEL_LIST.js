@@ -34,11 +34,11 @@ export const MODEL_LIST = {
     attribution: `"Aztec Statue Sculpt" (https://skfb.ly/6SIEP) by POLYCOSM is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).`,
   },
   cat: {
-    name: "cat",
+    name: "Cat",
     url: catUrl,
   },
   mourner: {
-    name: "mourner",
+    name: "Mourner",
     url: mournerUrl,
   },
   crowned_demon: {

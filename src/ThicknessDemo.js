@@ -125,7 +125,7 @@ export default async function ThicknessDemo(mainGui) {
     }
   })
 
-  sceneGui.add(transformControls, "mode", ["translate", "rotate", "scale"])
+  // sceneGui.add(transformControls, "mode", ["translate", "rotate", "scale"])
   bg_env = new BG_ENV(scene, renderer)
   bg_env.sunEnabled = true
   bg_env.shadowFloorEnabled = true
@@ -385,8 +385,6 @@ async function setupModels() {
     }
   }
 
-  folder.add(params, "model", ModelData).onChange(loadModel)
-
   const exposureEntryTween = new Tween(renderer)
     .to({ toneMappingExposure: 1 })
     .duration(2000)
@@ -412,6 +410,7 @@ async function setupModels() {
   }
 
   loadModel()
+  folder.add(params, "model", ModelData).onChange(loadModel)
 }
 
 const bbox = new Box3()
@@ -597,7 +596,6 @@ const IntroExtras = {
         )
 
         randomScale.setScalar(MathUtils.randFloat(0.6, 1.5))
-        console.log(randomScale)
         matrix.scale(randomScale)
 
         instancedParticles.setMatrixAt(index, matrix)
