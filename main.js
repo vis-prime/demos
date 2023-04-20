@@ -24,10 +24,10 @@ if (Object.keys(demos).includes(window.location.hash.substring(1))) {
   params.demo = window.location.hash.substring(1)
 }
 
-gui.add(params, "demo", Object.keys(demos)).onChange((v) => {
-  router.redirectTo(v)
-  location.reload()
-})
+// gui.add(params, "demo", Object.keys(demos)).onChange((v) => {
+//   router.redirectTo(v)
+//   location.reload()
+// })
 
 var router = new Router({
   mode: "hash",
