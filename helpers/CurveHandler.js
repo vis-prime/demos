@@ -65,7 +65,7 @@ export class CurveHandler {
     this.listFocus = []
     this.listFov = []
 
-    this.tension = 1
+    this.tension = 0.5
 
     this.lineCamera
     this.lineTarget
@@ -132,6 +132,7 @@ export class CurveHandler {
   }
 
   loadPreset(presetArray = preset) {
+    this.keyFrames.length = 0
     for (let index = 0; index < presetArray.length; index++) {
       let data = presetArray[index]
       const keyFrame = new KeyFrame()
@@ -329,7 +330,9 @@ export class CurveHandler {
       .onChange(() => {
         this.scrub()
       })
-
+    folder
+      .add(this.camera, "fov")
+      .onChange(() => this.camera.updateProjectionMatrix())
     folder.add(this, "addKeyFrame")
     folder.add(this, "showCurve")
     folder.add(this, "play")
@@ -380,6 +383,12 @@ export class CurveHandler {
       this.playBackTween.stop()
     } else {
       this.playBackTween.start()
+    }
+  }
+
+  stop() {
+    if (this.playBackTween.isPlaying()) {
+      this.playBackTween.stop()
     }
   }
 }

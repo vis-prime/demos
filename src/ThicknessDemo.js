@@ -13,18 +13,20 @@ import {
   Raycaster,
   Group,
   VSMShadowMap,
-  MeshPhysicalMaterial,
   Box3,
   Vector3,
   MathUtils,
+  SphereGeometry,
+  MeshBasicMaterial,
+  Mesh,
+  InstancedMesh,
+  Matrix4,
 } from "three"
 
 // Model and Env
 import { MODEL_LIST, MODEL_LOADER } from "../models/MODEL_LIST"
 import { BG_ENV } from "../helpers/BG_ENV"
 import { Easing, Tween, update } from "@tweenjs/tween.js"
-import { TextureLoader } from "three"
-import { TEXTURES_LIST } from "../textures/TEXTURES_LIST"
 import { HDRI_LIST } from "../hdri/HDRI_LIST"
 import { CurveHandler } from "../helpers/CurveHandler"
 const blender_docs =
@@ -65,6 +67,7 @@ export default async function ThicknessDemo(mainGui) {
   renderer.shadowMap.type = VSMShadowMap
   renderer.outputEncoding = sRGBEncoding
   renderer.toneMapping = ACESFilmicToneMapping
+  renderer.toneMappingExposure = 0
 
   app.appendChild(renderer.domElement)
 
@@ -76,7 +79,6 @@ export default async function ThicknessDemo(mainGui) {
     150
   )
   camera.position.set(3, 2, 3)
-  camera.name = "Camera"
   // scene
   scene = new Scene()
   scene.add(mainObjects)
@@ -124,7 +126,7 @@ export default async function ThicknessDemo(mainGui) {
   })
 
   sceneGui.add(transformControls, "mode", ["translate", "rotate", "scale"])
-  bg_env = new BG_ENV(scene)
+  bg_env = new BG_ENV(scene, renderer)
   bg_env.sunEnabled = true
   bg_env.shadowFloorEnabled = true
   bg_env.setEnvType("HDRI")
@@ -250,16 +252,20 @@ async function setupModels() {
   let modelFolder
 
   async function loadModel() {
-    mainObjects.clear()
+    curveHandler.stop()
     const data = params.model
     let model, modelPromise
+
     if (!data.model) {
       modelPromise = MODEL_LOADER(data.url).then((gltf) => {
         data.model = gltf.scene
       })
     }
+    await blackout()
+    mainObjects.clear()
 
     let bgEnvPromise
+
     if (data.hdri) {
       bg_env.preset = data.hdri
       bgEnvPromise = bg_env.updateAll()
@@ -275,14 +281,20 @@ async function setupModels() {
     setTimeout(() => {
       if (IntroCurves[data.name]) {
         //first camera use current pos
-        camera.position.toArray(IntroCurves[data.name][0].position)
-        controls.target.toArray(IntroCurves[data.name][0].target)
-        IntroCurves[data.name][0].fov = camera.fov
+        // camera.position.toArray(IntroCurves[data.name][0].position)
+        // controls.target.toArray(IntroCurves[data.name][0].target)
+        // IntroCurves[data.name][0].fov = camera.fov
         curveHandler.loadPreset(IntroCurves[data.name])
         curveHandler.play()
       } else {
         fitModelInViewport(mainObjects)
       }
+
+      if (IntroExtras[data.name]) {
+        IntroExtras[data.name]()
+      }
+
+      exposureEntryTween.start()
     }, 100)
 
     if (modelFolder) modelFolder.destroy()
@@ -375,6 +387,30 @@ async function setupModels() {
 
   folder.add(params, "model", ModelData).onChange(loadModel)
 
+  const exposureEntryTween = new Tween(renderer)
+    .to({ toneMappingExposure: 1 })
+    .duration(2000)
+    .easing(Easing.Quadratic.Out)
+
+  const exposureExitTween = new Tween(renderer)
+    .to({ toneMappingExposure: 0 })
+    .duration(1000)
+    .easing(Easing.Quadratic.Out)
+
+  const blackout = () => {
+    return new Promise((resolve, reject) => {
+      if (renderer.toneMappingExposure === 0) {
+        resolve()
+        return
+      }
+
+      exposureExitTween._valuesStart.toneMappingExposure =
+        renderer.toneMappingExposure
+      exposureExitTween.onComplete(resolve)
+      exposureExitTween.start()
+    })
+  }
+
   loadModel()
 }
 
@@ -462,4 +498,117 @@ const IntroCurves = {
       focus: [0, 0, 0],
     },
   ],
+
+  [MODEL_LIST.crowned_demon.name]: [
+    {
+      position: [-0.266634896037906, 0.42199497158512944, -0.24539424865135415],
+      target: [0.027214537757725255, 0.34758996128067343, -0.02477326451882255],
+      fov: 149,
+      focus: [0, 0, 0],
+    },
+    {
+      position: [-0.5886024054583632, 1.0464453715126747, 0.9545603661211215],
+      target: [0.027214537757725255, 0.34758996128067343, -0.02477326451882255],
+      fov: 61,
+      focus: [0, 0, 0],
+    },
+    {
+      position: [-1.9692589714105266, 0.8619989021216289, 11.444596023855219],
+      target: [0.027214537757725255, 0.34758996128067343, -0.02477326451882255],
+      fov: 4,
+      focus: [0, 0, 0],
+    },
+  ],
+
+  [MODEL_LIST.cat.name]: [
+    {
+      position: [-0.0462548695526149, 49.909485490411235, 0.12685289929020782],
+      target: [0.012018844485282898, 0.2759282495826483, 0.07137548923492432],
+      fov: 4,
+      focus: [0, 0, 0],
+    },
+    {
+      position: [-14.426923092458672, 18.216836497152695, 13.817454932177636],
+      target: [0.012018844485282898, 0.2759282495826483, 0.07137548923492432],
+      fov: 40,
+      focus: [0, 0, 0],
+    },
+    {
+      position: [-0.6983884127570257, 0.4383567898365339, 0.7654766425209693],
+      target: [0.012018844485282898, 0.2759282495826483, 0.07137548923492432],
+      fov: 80,
+      focus: [0, 0, 0],
+    },
+  ],
+
+  [MODEL_LIST.mourner.name]: [
+    {
+      position: [-0.7435876099939764, 0.5767087582050929, -0.33410177905734206],
+      target: [-0.0880950190926897, 0.4785560280754207, 0.5282091171035755],
+      fov: 6,
+      focus: [0, 0, 0],
+    },
+    {
+      position: [-1.645632273331322, 3.5122442610375155, 3.0459753702566763],
+      target: [-0.06061215623379156, 0.5492753703728687, 0.3785231856811201],
+      fov: 6,
+      focus: [0, 0, 0],
+    },
+    {
+      position: [2.4011512714399372, 1.6907156315557115, 4.119389452751478],
+      target: [0.037644224795048455, 0.8720645238701967, 0.1402132755680808],
+      fov: 13,
+      focus: [0, 0, 0],
+    },
+    {
+      position: [-1.8346955593615164, 1.4382798598126947, 3.214418876318874],
+      target: [-0.054762280552704205, 1.0616501794008093, 0.06541819498620187],
+      fov: 10,
+      focus: [0, 0, 0],
+    },
+    {
+      position: [-0.08180431919328181, 0.9374016935960667, 1.7785125019886479],
+      target: [-0.045845938474812026, 0.6331712508335492, 0.12170537744696061],
+      fov: 60,
+      focus: [0, 0, 0],
+    },
+  ],
+}
+
+let instancedParticles, particleTween
+const IntroExtras = {
+  [MODEL_LIST.mourner.name]: () => {
+    if (!instancedParticles) {
+      const geo = new SphereGeometry(0.01, 8, 8)
+      const mat = new MeshBasicMaterial()
+      mat.color.setRGB(10, 10, 10)
+
+      instancedParticles = new InstancedMesh(geo, mat, 1000)
+      const matrix = new Matrix4()
+      const randomScale = new Vector3()
+      console.log(instancedParticles)
+      for (let index = 0; index < instancedParticles.count; index++) {
+        matrix.identity()
+
+        matrix.setPosition(
+          MathUtils.randFloatSpread(10),
+          MathUtils.randFloat(0, 10),
+          MathUtils.randFloatSpread(10)
+        )
+
+        randomScale.setScalar(MathUtils.randFloat(0.6, 1.5))
+        console.log(randomScale)
+        matrix.scale(randomScale)
+
+        instancedParticles.setMatrixAt(index, matrix)
+        particleTween = new Tween(instancedParticles.rotation)
+          .to({
+            y: Math.PI * 4,
+          })
+          .duration(1200000)
+      }
+    }
+    particleTween.start()
+    scene.add(instancedParticles)
+  },
 }

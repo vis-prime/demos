@@ -55,8 +55,9 @@ const ENV_OPTIONS = {
 }
 
 export class BG_ENV {
-  constructor(scene) {
+  constructor(scene, renderer) {
     this.scene = scene
+    this.renderer = renderer
 
     this.preset = Object.values(HDRI_LIST)[0]
 
@@ -97,6 +98,7 @@ export class BG_ENV {
      */
     this.guiFolder = null
   }
+
   init() {
     // sun light
     if (this.sunEnabled && !this.sunPivot) {
@@ -227,7 +229,6 @@ export class BG_ENV {
         if (data.groundProj.radius) this.gpRadius = data.groundProj.radius
 
         if (data.groundProj.height) this.gpHeight = data.groundProj.height
-        this.bgTexture.minFilter = LinearFilter
         this.groundProjectedSkybox.material.uniforms.map.value = this.bgTexture
         this.groundProjectedSkybox.radius = this.gpRadius
         this.groundProjectedSkybox.height = this.gpHeight
@@ -317,6 +318,7 @@ export class BG_ENV {
         : await rgbeLoader.loadAsync(key)
       this.envCache[key] = texture
       texture.mapping = EquirectangularReflectionMapping
+      this.renderer.initTexture(texture)
     }
 
     this.envTexture = texture
@@ -341,6 +343,8 @@ export class BG_ENV {
         this.bgCache[key] = texture
         texture.mapping = EquirectangularReflectionMapping
         texture.encoding = sRGBEncoding
+        texture.minFilter = LinearFilter
+        this.renderer.initTexture(texture)
       }
 
       this.bgTexture = texture
