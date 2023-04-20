@@ -252,6 +252,9 @@ async function setupModels() {
   let modelFolder
 
   async function loadModel() {
+    if (camera.aspect < 1) {
+      gui.close()
+    }
     curveHandler.stop()
     const data = params.model
     let model, modelPromise
