@@ -25,10 +25,11 @@ import {
 
 // Model and Env
 import { MODEL_LIST, MODEL_LOADER } from "../models/MODEL_LIST"
-import { BG_ENV } from "../helpers/BG_ENV"
+import { BG_ENV, BG_OPTIONS } from "../helpers/BG_ENV"
 import { Easing, Tween, update } from "@tweenjs/tween.js"
 import { HDRI_LIST } from "../hdri/HDRI_LIST"
 import { CurveHandler } from "../helpers/CurveHandler"
+import { MeshStandardMaterial } from "three"
 const blender_docs =
   "https://docs.blender.org/manual/en/3.5/addons/import_export/scene_gltf2.html"
 let stats,
@@ -53,6 +54,8 @@ let sceneGui
  * @type {BG_ENV}
  */
 let bg_env
+
+let matGui
 
 export default async function MaterialSwapDemo(mainGui) {
   gui = mainGui
@@ -131,7 +134,7 @@ export default async function MaterialSwapDemo(mainGui) {
   bg_env.setEnvType("HDRI")
   bg_env.addGui(sceneGui)
 
-  await setupModels()
+  await setupAssets()
 
   animate()
 
@@ -186,7 +189,6 @@ function animate() {
 }
 
 function raycast() {
-  return
   // update the picking ray with the camera and pointer position
   raycaster.setFromCamera(pointer, camera)
 
@@ -203,7 +205,7 @@ function raycast() {
   } else {
     transformControls.attach(intersects[0].object)
   }
-
+  addMaterialGui(intersects[0].object)
   intersects.length = 0
 }
 
@@ -212,9 +214,36 @@ function onPointerMove(event) {
   pointer.y = -(event.clientY / window.innerHeight) * 2 + 1
 }
 
-async function setupModels() {
+async function setupAssets() {
   const folder = gui.addFolder("Swap")
   folder.open()
+
+  bg_env.preset = HDRI_LIST.skidpan
+  bg_env.updateAll()
+
+  const count = 10,
+    width = 1
+
+  for (let index = 0; index < count; index++) {
+    const mesh = new Mesh(
+      new SphereGeometry(width / 2).translate(0, width / 2, 0),
+      new MeshStandardMaterial({ color: 0xffffff, name: "mat_" + index })
+    )
+    mesh.name = "mesh_" + index
+
+    mesh.position.x = width * index - (width * count) / 2
+    mainObjects.add(mesh)
+
+    console.log(mesh.position.x)
+  }
+}
+
+function addMaterialGui(mesh) {
+  console.log(mesh.name, { mesh })
+  matGui?.destroy()
+  matGui = gui.addFolder(mesh.name)
+  matGui.open()
+  matGui.add(mesh.material, "roughness", 0, 1)
 }
 
 const bbox = new Box3()
