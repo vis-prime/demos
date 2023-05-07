@@ -17,19 +17,17 @@ import {
   Vector3,
   MathUtils,
   SphereGeometry,
-  MeshBasicMaterial,
   Mesh,
-  InstancedMesh,
-  Matrix4,
+  RepeatWrapping,
 } from "three"
 
 // Model and Env
-import { MODEL_LIST, MODEL_LOADER } from "../models/MODEL_LIST"
-import { BG_ENV, BG_OPTIONS } from "../helpers/BG_ENV"
+import { BG_ENV } from "../helpers/BG_ENV"
 import { Easing, Tween, update } from "@tweenjs/tween.js"
 import { HDRI_LIST } from "../hdri/HDRI_LIST"
-import { CurveHandler } from "../helpers/CurveHandler"
 import { MeshStandardMaterial } from "three"
+import { MATERIAL_LIST } from "../materials/MATERIAL_LIST"
+import { TextureLoader } from "three"
 const blender_docs =
   "https://docs.blender.org/manual/en/3.5/addons/import_export/scene_gltf2.html"
 let stats,
@@ -227,8 +225,12 @@ async function setupAssets() {
   for (let index = 0; index < count; index++) {
     const mesh = new Mesh(
       new SphereGeometry(width / 2).translate(0, width / 2, 0),
-      new MeshStandardMaterial({ color: 0xffffff, name: "mat_" + index })
+      new MeshStandardMaterial({
+        color: 0xffffff * Math.random(),
+        name: "mat_" + index,
+      })
     )
+    mesh.material.materialPreset = new MaterialPreset()
     mesh.name = "mesh_" + index
 
     mesh.position.x = width * index - (width * count) / 2
@@ -238,12 +240,41 @@ async function setupAssets() {
   }
 }
 
+/**
+ * Create mat gui
+ * @param {Mesh} mesh
+ */
 function addMaterialGui(mesh) {
   console.log(mesh.name, { mesh })
   matGui?.destroy()
   matGui = gui.addFolder(mesh.name)
   matGui.open()
-  matGui.add(mesh.material, "roughness", 0, 1)
+
+  /**
+   * @type {MeshStandardMaterial}
+   */
+  const mat = mesh.material
+  matGui.addColor(mat, "color")
+  matGui.add(mat, "roughness", 0, 1)
+  matGui.add(mat, "metalness", 0, 1)
+  matGui.add(mat, "displacementBias", 0, 1)
+  matGui.add(mat, "displacementScale", 0, 1)
+
+  matGui
+    .add(mat.materialPreset, "selectedMaterial", MATERIAL_LIST)
+    .onChange(() => {
+      applyMaterial(mesh)
+    })
+
+  for (const value of Object.values(mat)) {
+    if (value?.isTexture) {
+      value.wrapS = RepeatWrapping
+      value.wrapT = RepeatWrapping
+
+      matGui.add(value.repeat, "x", 0.1, 5)
+      matGui.add(value.repeat, "y", 0.1, 5)
+    }
+  }
 }
 
 const bbox = new Box3()
@@ -285,4 +316,107 @@ function fitModelInViewport(model) {
     .duration(1000)
     .easing(Easing.Quadratic.InOut)
     .start()
+}
+
+const textureLoader = new TextureLoader()
+
+/**
+ * Apply mat
+ * @param {Mesh} mesh
+ */
+const applyMaterial = async (mesh) => {
+  /**
+   * @type {MeshStandardMaterial}
+   */
+  const mat = mesh.material
+
+  /**
+   * @type {MaterialPreset}
+   */
+  const presetData = mat.materialPreset
+
+  console.log(presetData)
+
+  const texturesDict =
+    presetData.format === "org"
+      ? presetData.selectedMaterial.textures_org
+      : presetData.selectedMaterial.textures
+
+  let diffusePromise, roughPromise, dispPromise
+  // TODO : put the promises into a dict for easy access
+  // name the textures
+  // store repeat values separately somewhere
+  //
+  for (const [key, relativePath] of Object.entries(texturesDict)) {
+    const url = getImageUrl(relativePath)
+
+    console.log(key, relativePath, url)
+
+    switch (key) {
+      case "diffuse": {
+        diffusePromise = textureLoader.loadAsync(url)
+        break
+      }
+
+      case "rough": {
+        roughPromise = textureLoader.loadAsync(url)
+        break
+      }
+
+      case "displace": {
+        dispPromise = textureLoader.loadAsync(url)
+        break
+      }
+
+      default: {
+        break
+      }
+    }
+
+    const [diffuseTexture, roughTexture, dispTexture] = await Promise.all([
+      diffusePromise,
+      roughPromise,
+      dispPromise,
+    ])
+
+    console.log(diffuseTexture, roughTexture)
+    if (diffuseTexture) {
+      diffuseTexture.encoding = sRGBEncoding
+      mat.map = diffuseTexture
+    }
+
+    if (roughTexture) {
+      mat.roughnessMap = roughTexture
+    }
+
+    if (dispTexture) {
+      mat.displacementMap = dispTexture
+    }
+
+    if (roughTexture) {
+      mat.roughnessMap = roughTexture
+    }
+
+    mat.needsUpdate = true
+
+    for (const value of Object.values(mat)) {
+      if (value?.isTexture) {
+        value.wrapS = RepeatWrapping
+        value.wrapT = RepeatWrapping
+      }
+    }
+
+    addMaterialGui(mesh)
+  }
+}
+
+function getImageUrl(name) {
+  return new URL(`../materials/${name}`, import.meta.url).href
+}
+
+class MaterialPreset {
+  constructor() {
+    this.selectedMaterial = null
+    this.format = "org" // org || ktx
+  }
 }
