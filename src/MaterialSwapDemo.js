@@ -19,17 +19,17 @@ import {
   SphereGeometry,
   Mesh,
   RepeatWrapping,
+  MeshStandardMaterial,
+  TextureLoader,
 } from "three"
 
 // Model and Env
+import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader"
 import { BG_ENV } from "../helpers/BG_ENV"
 import { Easing, Tween, update } from "@tweenjs/tween.js"
 import { HDRI_LIST } from "../hdri/HDRI_LIST"
-import { MeshStandardMaterial } from "three"
 import { MATERIAL_LIST } from "../materials/MATERIAL_LIST"
-import { TextureLoader } from "three"
-const blender_docs =
-  "https://docs.blender.org/manual/en/3.5/addons/import_export/scene_gltf2.html"
+
 let stats,
   renderer,
   raf,
@@ -265,6 +265,9 @@ function addMaterialGui(mesh) {
     .onChange(() => {
       applyMaterial(mesh)
     })
+  matGui.add(mat.materialPreset, "format", ["webImg", "ktx"]).onChange(() => {
+    applyMaterial(mesh)
+  })
 
   for (const value of Object.values(mat)) {
     if (value?.isTexture) {
@@ -319,7 +322,9 @@ function fitModelInViewport(model) {
 }
 
 const textureLoader = new TextureLoader()
-
+const ktxTextureLoader = new KTX2Loader()
+  .setTranscoderPath("jsm/libs/basis/")
+  .detectSupport(renderer)
 /**
  * Apply mat
  * @param {Mesh} mesh
@@ -335,79 +340,64 @@ const applyMaterial = async (mesh) => {
    */
   const presetData = mat.materialPreset
 
-  console.log(presetData)
+  const selectedMaterial = presetData.selectedMaterial
+
+  if (!selectedMaterial) return
 
   const texturesDict =
-    presetData.format === "org"
+    presetData.format === "webImg"
       ? presetData.selectedMaterial.textures_org
       : presetData.selectedMaterial.textures
 
-  let diffusePromise, roughPromise, dispPromise
-  // TODO : put the promises into a dict for easy access
-  // name the textures
-  // store repeat values separately somewhere
+  // TODO store repeat values separately somewhere
   //
+
+  console.log({ texturesDict })
+
+  const loader =
+    presetData.format === "webImg" ? textureLoader : ktxTextureLoader
+
+  const promiseArray = []
+  const promiseDict = {}
   for (const [key, relativePath] of Object.entries(texturesDict)) {
     const url = getImageUrl(relativePath)
 
     console.log(key, relativePath, url)
 
-    switch (key) {
-      case "diffuse": {
-        diffusePromise = textureLoader.loadAsync(url)
-        break
-      }
-
-      case "rough": {
-        roughPromise = textureLoader.loadAsync(url)
-        break
-      }
-
-      case "displace": {
-        dispPromise = textureLoader.loadAsync(url)
-        break
-      }
-
-      default: {
-        break
-      }
-    }
-
-    const [diffuseTexture, roughTexture, dispTexture] = await Promise.all([
-      diffusePromise,
-      roughPromise,
-      dispPromise,
-    ])
-
-    console.log(diffuseTexture, roughTexture)
-    if (diffuseTexture) {
-      diffuseTexture.encoding = sRGBEncoding
-      mat.map = diffuseTexture
-    }
-
-    if (roughTexture) {
-      mat.roughnessMap = roughTexture
-    }
-
-    if (dispTexture) {
-      mat.displacementMap = dispTexture
-    }
-
-    if (roughTexture) {
-      mat.roughnessMap = roughTexture
-    }
-
-    mat.needsUpdate = true
-
-    for (const value of Object.values(mat)) {
-      if (value?.isTexture) {
-        value.wrapS = RepeatWrapping
-        value.wrapT = RepeatWrapping
-      }
-    }
-
-    addMaterialGui(mesh)
+    promiseArray.push(
+      loader.loadAsync(url).then((texture) => {
+        promiseDict[key] = texture
+        texture.name = presetData.selectedMaterial.name + "_" + key
+        if (key === "diffuse") texture.encoding = sRGBEncoding
+        texture.wrapS = RepeatWrapping
+        texture.wrapT = RepeatWrapping
+      })
+    )
   }
+
+  console.log(promiseArray, promiseDict)
+  await Promise.allSettled(promiseArray)
+  console.log(promiseDict)
+
+  if (promiseDict.diffuse) {
+    mat.map = promiseDict.diffuse
+  }
+
+  if (promiseDict.rough) {
+    mat.roughnessMap = promiseDict.rough
+  }
+
+  if (promiseDict.disp) {
+    mat.displacementMap = promiseDict.disp
+  }
+
+  if (promiseDict.metal) {
+    mat.metalnessMap = promiseDict.metal
+  }
+
+  mat.needsUpdate = true
+
+  addMaterialGui(mesh)
 }
 
 function getImageUrl(name) {
@@ -417,6 +407,6 @@ function getImageUrl(name) {
 class MaterialPreset {
   constructor() {
     this.selectedMaterial = null
-    this.format = "org" // org || ktx
+    this.format = "webImg" // webImg || ktx
   }
 }
