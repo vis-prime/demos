@@ -21,6 +21,7 @@ import {
   RepeatWrapping,
   MeshStandardMaterial,
   TextureLoader,
+  SRGBColorSpace,
 } from "three"
 
 // Model and Env
@@ -55,6 +56,11 @@ let bg_env
 
 let matGui
 
+/**
+ * @type {KTX2Loader}
+ */
+let ktxTextureLoader
+
 export default async function MaterialSwapDemo(mainGui) {
   gui = mainGui
   sceneGui = gui.addFolder("Scene")
@@ -68,6 +74,10 @@ export default async function MaterialSwapDemo(mainGui) {
   renderer.shadowMap.type = VSMShadowMap
   renderer.outputEncoding = sRGBEncoding
   renderer.toneMapping = ACESFilmicToneMapping
+
+  ktxTextureLoader = new KTX2Loader()
+    .setTranscoderPath("./basis/")
+    .detectSupport(renderer)
 
   app.appendChild(renderer.domElement)
 
@@ -265,7 +275,7 @@ function addMaterialGui(mesh) {
     .onChange(() => {
       applyMaterial(mesh)
     })
-  matGui.add(mat.materialPreset, "format", ["webImg", "ktx"]).onChange(() => {
+  matGui.add(mat.materialPreset, "format", ["webP", "ktx"]).onChange(() => {
     applyMaterial(mesh)
   })
 
@@ -322,9 +332,7 @@ function fitModelInViewport(model) {
 }
 
 const textureLoader = new TextureLoader()
-const ktxTextureLoader = new KTX2Loader()
-  .setTranscoderPath("jsm/libs/basis/")
-  .detectSupport(renderer)
+
 /**
  * Apply mat
  * @param {Mesh} mesh
@@ -345,7 +353,7 @@ const applyMaterial = async (mesh) => {
   if (!selectedMaterial) return
 
   const texturesDict =
-    presetData.format === "webImg"
+    presetData.format === "webP"
       ? presetData.selectedMaterial.textures_org
       : presetData.selectedMaterial.textures
 
@@ -354,8 +362,7 @@ const applyMaterial = async (mesh) => {
 
   console.log({ texturesDict })
 
-  const loader =
-    presetData.format === "webImg" ? textureLoader : ktxTextureLoader
+  const loader = presetData.format === "webP" ? textureLoader : ktxTextureLoader
 
   const promiseArray = []
   const promiseDict = {}
@@ -368,7 +375,11 @@ const applyMaterial = async (mesh) => {
       loader.loadAsync(url).then((texture) => {
         promiseDict[key] = texture
         texture.name = presetData.selectedMaterial.name + "_" + key
-        if (key === "diffuse") texture.encoding = sRGBEncoding
+        if (key === "diffuse" && presetData.format === "webP") {
+          texture.encoding = sRGBEncoding
+          // texture.colorSpace = SRGBColorSpace
+        }
+        texture.flipY = false
         texture.wrapS = RepeatWrapping
         texture.wrapT = RepeatWrapping
       })
@@ -379,22 +390,10 @@ const applyMaterial = async (mesh) => {
   await Promise.allSettled(promiseArray)
   console.log(promiseDict)
 
-  if (promiseDict.diffuse) {
-    mat.map = promiseDict.diffuse
-  }
-
-  if (promiseDict.rough) {
-    mat.roughnessMap = promiseDict.rough
-  }
-
-  if (promiseDict.disp) {
-    mat.displacementMap = promiseDict.disp
-  }
-
-  if (promiseDict.metal) {
-    mat.metalnessMap = promiseDict.metal
-  }
-
+  mat.map = promiseDict.diffuse ? promiseDict.diffuse : null
+  mat.metalnessMap = promiseDict.metal ? promiseDict.metal : null
+  mat.roughnessMap = promiseDict.rough ? promiseDict.rough : null
+  mat.displacementMap = promiseDict.disp ? promiseDict.disp : null
   mat.needsUpdate = true
 
   addMaterialGui(mesh)
@@ -407,6 +406,6 @@ function getImageUrl(name) {
 class MaterialPreset {
   constructor() {
     this.selectedMaterial = null
-    this.format = "webImg" // webImg || ktx
+    this.format = "webP" // webP || ktx
   }
 }
