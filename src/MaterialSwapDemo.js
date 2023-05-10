@@ -29,7 +29,7 @@ import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader"
 import { BG_ENV } from "../helpers/BG_ENV"
 import { Easing, Tween, update } from "@tweenjs/tween.js"
 import { HDRI_LIST } from "../hdri/HDRI_LIST"
-import { MATERIAL_LIST } from "../materials/MATERIAL_LIST"
+import { MATERIAL_LIST } from "./MATERIAL_LIST"
 
 let stats,
   renderer,
