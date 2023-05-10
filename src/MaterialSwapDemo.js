@@ -22,6 +22,7 @@ import {
   MeshStandardMaterial,
   TextureLoader,
   SRGBColorSpace,
+  BoxGeometry,
 } from "three"
 
 // Model and Env
@@ -60,6 +61,8 @@ let matGui
  * @type {KTX2Loader}
  */
 let ktxTextureLoader
+
+const TEXTURE_CACHE = {}
 
 export default async function MaterialSwapDemo(mainGui) {
   gui = mainGui
@@ -230,23 +233,33 @@ async function setupAssets() {
   bg_env.updateAll()
 
   const count = 10,
-    width = 1
+    width = 1,
+    padding = 0.1
 
   for (let index = 0; index < count; index++) {
     const mesh = new Mesh(
       new SphereGeometry(width / 2).translate(0, width / 2, 0),
       new MeshStandardMaterial({
-        color: 0xffffff * Math.random(),
+        // color: 0xffffff * Math.random(),
         name: "mat_" + index,
       })
     )
+    mesh.material.masterRepeat = new Vector2(1, 1)
     mesh.material.materialPreset = new MaterialPreset()
     mesh.name = "mesh_" + index
 
-    mesh.position.x = width * index - (width * count) / 2
-    mainObjects.add(mesh)
+    const paddedWidth = width + padding
+    mesh.position.x = paddedWidth * index - (paddedWidth * count) / 2 + padding
 
-    console.log(mesh.position.x)
+    const mesh1 = new Mesh(
+      new BoxGeometry(width, width, width).translate(0, width / 2, 0),
+      mesh.material
+    )
+    mesh1.name = "mesh1_" + index
+    mesh1.position.z = paddedWidth
+    mesh1.position.x = paddedWidth * index - (paddedWidth * count) / 2
+
+    mainObjects.add(mesh, mesh1)
   }
 }
 
@@ -279,13 +292,18 @@ function addMaterialGui(mesh) {
     applyMaterial(mesh)
   })
 
-  for (const value of Object.values(mat)) {
-    if (value?.isTexture) {
-      value.wrapS = RepeatWrapping
-      value.wrapT = RepeatWrapping
+  matGui.add(mat.masterRepeat, "x", 0.1, 5).onChange(() => {
+    updateMasterRepeat(mat)
+  })
+  matGui.add(mat.masterRepeat, "y", 0.1, 5).onChange(() => {
+    updateMasterRepeat(mat)
+  })
+}
 
-      matGui.add(value.repeat, "x", 0.1, 5)
-      matGui.add(value.repeat, "y", 0.1, 5)
+function updateMasterRepeat(material) {
+  for (const tex of Object.values(material)) {
+    if (tex && tex.isTexture) {
+      tex.repeat.copy(material.masterRepeat)
     }
   }
 }
@@ -352,6 +370,10 @@ const applyMaterial = async (mesh) => {
 
   if (!selectedMaterial) return
 
+  for (const tex of Object.values(TEXTURE_CACHE)) {
+    tex.dispose()
+  }
+
   const texturesDict =
     presetData.format === "webP"
       ? presetData.selectedMaterial.textures_org
@@ -371,19 +393,25 @@ const applyMaterial = async (mesh) => {
 
     console.log(key, relativePath, url)
 
-    promiseArray.push(
-      loader.loadAsync(url).then((texture) => {
-        promiseDict[key] = texture
-        texture.name = presetData.selectedMaterial.name + "_" + key
-        if (key === "diffuse" && presetData.format === "webP") {
-          texture.encoding = sRGBEncoding
-          // texture.colorSpace = SRGBColorSpace
-        }
-        texture.flipY = false
-        texture.wrapS = RepeatWrapping
-        texture.wrapT = RepeatWrapping
-      })
-    )
+    if (TEXTURE_CACHE[url]) {
+      promiseDict[key] = TEXTURE_CACHE[url]
+    } else {
+      promiseArray.push(
+        loader.loadAsync(url).then((texture) => {
+          promiseDict[key] = texture
+          TEXTURE_CACHE[url] = texture
+
+          texture.name = presetData.selectedMaterial.name + "_" + key
+          if (key === "diffuse") {
+            texture.encoding = sRGBEncoding
+            // texture.colorSpace = SRGBColorSpace
+          }
+          texture.flipY = false
+          texture.wrapS = RepeatWrapping
+          texture.wrapT = RepeatWrapping
+        })
+      )
+    }
   }
 
   console.log(promiseArray, promiseDict)
