@@ -389,7 +389,7 @@ const applyMaterial = async (mesh) => {
   const promiseArray = []
   const promiseDict = {}
   for (const [key, relativePath] of Object.entries(texturesDict)) {
-    const url = getImageUrl(relativePath)
+    const url = relativePath
 
     console.log(key, relativePath, url)
 
@@ -427,9 +427,9 @@ const applyMaterial = async (mesh) => {
   addMaterialGui(mesh)
 }
 
-function getImageUrl(name) {
-  return new URL(`../materials/${name}`, import.meta.url).href
-}
+// function getImageUrl(name) {
+//   return new URL(`../materials/${name}`, import.meta.url).href
+// }
 
 class MaterialPreset {
   constructor() {
