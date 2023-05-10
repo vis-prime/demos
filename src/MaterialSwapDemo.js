@@ -421,7 +421,9 @@ const applyMaterial = async (mesh) => {
   mat.map = promiseDict.diffuse ? promiseDict.diffuse : null
   mat.metalnessMap = promiseDict.metal ? promiseDict.metal : null
   mat.roughnessMap = promiseDict.rough ? promiseDict.rough : null
+  mat.normalMap = promiseDict.normal ? promiseDict.normal : null
   mat.displacementMap = promiseDict.disp ? promiseDict.disp : null
+
   mat.needsUpdate = true
 
   addMaterialGui(mesh)
