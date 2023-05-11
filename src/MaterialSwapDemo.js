@@ -414,9 +414,8 @@ const applyMaterial = async (mesh) => {
     }
   }
 
-  console.log(promiseArray, promiseDict)
   await Promise.allSettled(promiseArray)
-  console.log(promiseDict)
+  console.log({ promiseArray, promiseDict })
 
   mat.map = promiseDict.diffuse ? promiseDict.diffuse : null
   mat.metalnessMap = promiseDict.metal ? promiseDict.metal : null
