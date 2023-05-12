@@ -23,6 +23,14 @@ import {
   TextureLoader,
   SRGBColorSpace,
   BoxGeometry,
+  CylinderGeometry,
+  PlaneGeometry,
+  MeshPhysicalMaterial,
+  TorusGeometry,
+  TorusKnotGeometry,
+  FrontSide,
+  OctahedronGeometry,
+  Color,
 } from "three"
 
 // Model and Env
@@ -31,8 +39,13 @@ import { BG_ENV } from "../helpers/BG_ENV"
 import { Easing, Tween, update } from "@tweenjs/tween.js"
 import { HDRI_LIST } from "../hdri/HDRI_LIST"
 import { MATERIAL_LIST } from "./MATERIAL_LIST"
+import { MeshBasicMaterial } from "three"
+import { Text } from "troika-three-text"
 
 let stats,
+  /**
+   * @type {WebGLRenderer}
+   */
   renderer,
   raf,
   camera,
@@ -49,6 +62,13 @@ draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.5/")
 gltfLoader.setDRACOLoader(draco)
 const raycaster = new Raycaster()
 const intersects = [] //raycast
+
+const colorWhite = new Color("white")
+const colorBlack = new Color("black")
+const colorRed = new Color("red")
+const colorGreen = new Color("green")
+const colorAny = new Color()
+
 let sceneGui
 /**
  * @type {BG_ENV}
@@ -91,7 +111,7 @@ export default async function MaterialSwapDemo(mainGui) {
     0.1,
     150
   )
-  camera.position.set(3, 2, 3)
+  camera.position.set(5, 2, 5)
   // scene
   scene = new Scene()
   scene.add(mainObjects)
@@ -225,6 +245,190 @@ function onPointerMove(event) {
   pointer.y = -(event.clientY / window.innerHeight) * 2 + 1
 }
 
+/**
+ * Represents a material preset.
+ * @class
+ */
+class MaterialPreset {
+  /**
+   * Create a MaterialPreset instance.
+   * @constructor
+   */
+  constructor() {
+    /**
+     * The selected material.
+     * @type {null}
+     */
+    this.pbrPreset = null
+
+    /**
+     * The format of the preset (webP or ktx).
+     * @type {string}
+     * @default "webP"
+     */
+    this.format = "webP"
+
+    /**
+     * The repeat for all channels
+     * @type {Number}
+     */
+    this.masterRepeat = 1
+  }
+}
+
+/**
+ * Object representing a mesh for different channels.
+ * @typedef {Object} MeshForChannels
+ * @property {Group} diffuse - The mesh for the diffuse channel.
+ * @property {Group} rough - The mesh for the roughness channel.
+ * @property {Group} metal - The mesh for the metalness channel.
+ * @property {Group} emit - The mesh for the emissive channel.
+ * @property {Group} normal - The mesh for the normal channel.
+ * @property {Group} ao - The mesh for the ambient occlusion channel.
+ * @property {Group} displace - The mesh for the displacement channel.
+ */
+
+const texMeshGeometry = new PlaneGeometry()
+
+/**
+ * Object representing meshes for different channels.
+ * @type {MeshForChannels}
+ */
+const meshForChannels = {
+  diffuse: null,
+  rough: null,
+  metal: null,
+  normal: null,
+  emit: null,
+  ao: null,
+  displace: null,
+}
+
+/**
+ * Material used for display.
+ * @type {THREE.MeshPhysicalMaterial & { vis_materialPreset: MaterialPreset }}
+ */
+const displayMaterial = new MeshPhysicalMaterial()
+displayMaterial.vis_materialPreset = new MaterialPreset()
+
+/**
+ * Object representing meshes for display.
+ * @typedef {Object} MeshForDisplay
+ * @property {Mesh} box - The mesh representing a box.
+ * @property {Mesh} sphere - The mesh representing a sphere.
+ * @property {Mesh} cylinder - The mesh representing a cylinder.
+ * @property {Mesh} torus - The mesh representing a torus.
+ * @property {Mesh} torusKnot - The mesh representing a torus knot.
+ * @property {Mesh} plane - The mesh representing a plane.
+ * @property {Mesh} octahedron - The mesh representing a octahedron.
+ */
+
+/**
+ * Object containing meshes for display.
+ * @type {MeshForDisplay}
+ */
+const meshForDisplay = {
+  box: null,
+  sphere: null,
+  cylinder: null,
+  torus: null,
+  torusKnot: null,
+  plane: null,
+  octahedron: null,
+}
+
+function setupStage() {
+  const platform = new Mesh(
+    new CylinderGeometry(2.5, 3, 0.1, 48).translate(0, 0.05, 0),
+    new MeshStandardMaterial({ color: "grey", roughness: 0.5 })
+  )
+  scene.add(platform)
+
+  const names = Object.keys(meshForChannels)
+
+  const count = names.length,
+    width = 1,
+    padding = 0.4
+
+  for (let index = 0; index < count; index++) {
+    const name = names[index]
+    const grp = new Group()
+    meshForChannels[name] = grp
+    grp.vis_textureMesh = new Mesh(
+      texMeshGeometry,
+      new MeshBasicMaterial({ color: 0x000000 })
+    )
+
+    const sdfText = new Text()
+
+    sdfText.anchorY = "50%"
+    sdfText.anchorX = "center"
+
+    sdfText.text = name.toUpperCase()
+    sdfText.fontSize = 0.15
+    sdfText.material.side = FrontSide
+    sdfText.position.set(0, 0, 0.01)
+    sdfText.color = 0xff0000
+    sdfText.outlineWidth = "5%"
+    sdfText.sync()
+    grp.vis_textMesh = sdfText
+    grp.add(grp.vis_textureMesh, sdfText)
+
+    const paddedWidth = width + padding
+    const X = paddedWidth * index - (paddedWidth * count) / 2 + padding
+    grp.position.set(X, 1.5, -5)
+  }
+
+  scene.add(...Object.values(meshForChannels))
+
+  meshForDisplay.box = new Mesh(
+    new BoxGeometry(width, width, width, 10, 10, 10),
+    displayMaterial
+  )
+  meshForDisplay.sphere = new Mesh(
+    new SphereGeometry(width / 2),
+    displayMaterial
+  )
+  meshForDisplay.cylinder = new Mesh(
+    new CylinderGeometry(width / 2, width / 2, width),
+    displayMaterial
+  )
+  meshForDisplay.torus = new Mesh(
+    new TorusGeometry(width / 3, width / 8),
+    displayMaterial
+  )
+  meshForDisplay.torusKnot = new Mesh(
+    new TorusKnotGeometry(width / 4, width / 8),
+    displayMaterial
+  )
+  meshForDisplay.plane = new Mesh(
+    new PlaneGeometry(width, width, 10, 10)
+      .rotateX(-Math.PI / 2)
+      .translate(0, -width / 2, 0),
+    displayMaterial
+  )
+  meshForDisplay.octahedron = new Mesh(
+    new OctahedronGeometry(width / 2),
+    displayMaterial
+  )
+
+  const meshes = Object.values(meshForDisplay)
+
+  const meshCount = meshes.length,
+    meshPadding = 0.4
+
+  for (let index = 0; index < meshCount; index++) {
+    const m = meshes[index]
+    m.geometry.translate(0, width / 2, 0)
+
+    const paddedWidth = width + meshPadding
+    const X = paddedWidth * index - (paddedWidth * count) / 2 + meshPadding
+    m.position.set(X, 0, 3)
+  }
+
+  mainObjects.add(...meshes)
+}
+
 async function setupAssets() {
   const folder = gui.addFolder("Swap")
   folder.open()
@@ -232,35 +436,7 @@ async function setupAssets() {
   bg_env.preset = HDRI_LIST.skidpan
   bg_env.updateAll()
 
-  const count = 10,
-    width = 1,
-    padding = 0.1
-
-  for (let index = 0; index < count; index++) {
-    const mesh = new Mesh(
-      new SphereGeometry(width / 2).translate(0, width / 2, 0),
-      new MeshStandardMaterial({
-        // color: 0xffffff * Math.random(),
-        name: "mat_" + index,
-      })
-    )
-    mesh.material.masterRepeat = new Vector2(1, 1)
-    mesh.material.materialPreset = new MaterialPreset()
-    mesh.name = "mesh_" + index
-
-    const paddedWidth = width + padding
-    mesh.position.x = paddedWidth * index - (paddedWidth * count) / 2 + padding
-
-    const mesh1 = new Mesh(
-      new BoxGeometry(width, width, width).translate(0, width / 2, 0),
-      mesh.material
-    )
-    mesh1.name = "mesh1_" + index
-    mesh1.position.z = paddedWidth
-    mesh1.position.x = paddedWidth * index - (paddedWidth * count) / 2
-
-    mainObjects.add(mesh, mesh1)
-  }
+  setupStage()
 }
 
 /**
@@ -268,8 +444,14 @@ async function setupAssets() {
  * @param {Mesh} mesh
  */
 function addMaterialGui(mesh) {
-  console.log(mesh.name, { mesh })
-  matGui?.destroy()
+  if (matGui) {
+    for (const child of matGui.children) {
+      child.updateDisplay()
+    }
+
+    return
+  }
+
   matGui = gui.addFolder(mesh.name)
   matGui.open()
 
@@ -284,26 +466,27 @@ function addMaterialGui(mesh) {
   matGui.add(mat, "displacementScale", 0, 1)
 
   matGui
-    .add(mat.materialPreset, "selectedMaterial", MATERIAL_LIST)
+    .add(mat.vis_materialPreset, "pbrPreset", MATERIAL_LIST)
     .onChange(() => {
       applyMaterial(mesh)
     })
-  matGui.add(mat.materialPreset, "format", ["webP", "ktx"]).onChange(() => {
+  matGui.add(mat.vis_materialPreset, "format", ["webP", "ktx"]).onChange(() => {
     applyMaterial(mesh)
   })
 
-  matGui.add(mat.masterRepeat, "x", 0.1, 5).onChange(() => {
-    updateMasterRepeat(mat)
-  })
-  matGui.add(mat.masterRepeat, "y", 0.1, 5).onChange(() => {
+  matGui.add(mat.vis_materialPreset, "masterRepeat", 0.1, 5).onChange(() => {
     updateMasterRepeat(mat)
   })
 }
 
+/**
+ * Update repeat
+ * @param { * @type {THREE.MeshPhysicalMaterial & { vis_materialPreset: MaterialPreset }}}
+ */
 function updateMasterRepeat(material) {
   for (const tex of Object.values(material)) {
     if (tex && tex.isTexture) {
-      tex.repeat.copy(material.masterRepeat)
+      tex.repeat.setScalar(material.vis_materialPreset.masterRepeat)
     }
   }
 }
@@ -320,7 +503,12 @@ function fitModelInViewport(model) {
   bbox.getCenter(center)
   bbox.getSize(size)
 
-  let distance = size.length() / Math.tan(MathUtils.degToRad(camera.fov) / 2)
+  const sizeLength = size.length()
+
+  if (sizeLength === 0) return
+
+  let distance = sizeLength / Math.tan(MathUtils.degToRad(camera.fov) / 2)
+
   distance -= distance * 0.3
   // move the camera to look at the center of the mesh
 
@@ -333,7 +521,6 @@ function fitModelInViewport(model) {
     1 / (center.distanceTo(camera.position) / distance)
   )
 
-  console.log(endPos.distanceTo(center), distance)
   endTar.copy(center)
 
   new Tween(camera.position)
@@ -364,58 +551,51 @@ const applyMaterial = async (mesh) => {
   /**
    * @type {MaterialPreset}
    */
-  const presetData = mat.materialPreset
+  const presetData = mat.vis_materialPreset
 
-  const selectedMaterial = presetData.selectedMaterial
+  const pbrPreset = presetData.pbrPreset
 
-  if (!selectedMaterial) return
-
-  for (const tex of Object.values(TEXTURE_CACHE)) {
-    tex.dispose()
-  }
+  if (!pbrPreset) return
 
   const texturesDict =
     presetData.format === "webP"
-      ? presetData.selectedMaterial.textures_org
-      : presetData.selectedMaterial.textures
-
-  // TODO store repeat values separately somewhere
-  //
-
-  console.log({ texturesDict })
+      ? presetData.pbrPreset.textures_org
+      : presetData.pbrPreset.textures
 
   const loader = presetData.format === "webP" ? textureLoader : ktxTextureLoader
 
   const promiseArray = []
   const promiseDict = {}
-  for (const [key, relativePath] of Object.entries(texturesDict)) {
-    const url = relativePath
+  if (texturesDict) {
+    for (const [key, relativePath] of Object.entries(texturesDict)) {
+      const url = relativePath
 
-    console.log(key, relativePath, url)
+      if (TEXTURE_CACHE[url]) {
+        promiseDict[key] = TEXTURE_CACHE[url]
+      } else {
+        promiseArray.push(
+          loader.loadAsync(url).then((texture) => {
+            promiseDict[key] = texture
+            TEXTURE_CACHE[url] = texture
 
-    if (TEXTURE_CACHE[url]) {
-      promiseDict[key] = TEXTURE_CACHE[url]
-    } else {
-      promiseArray.push(
-        loader.loadAsync(url).then((texture) => {
-          promiseDict[key] = texture
-          TEXTURE_CACHE[url] = texture
+            texture.name = presetData.pbrPreset.name + "_" + key
+            if (key === "diffuse") {
+              texture.encoding = sRGBEncoding
+              // texture.colorSpace = SRGBColorSpace
+            }
 
-          texture.name = presetData.selectedMaterial.name + "_" + key
-          if (key === "diffuse") {
-            texture.encoding = sRGBEncoding
-            // texture.colorSpace = SRGBColorSpace
-          }
-          texture.flipY = false
-          texture.wrapS = RepeatWrapping
-          texture.wrapT = RepeatWrapping
-        })
-      )
+            texture.flipY = false
+            texture.wrapS = RepeatWrapping
+            texture.wrapT = RepeatWrapping
+
+            renderer.initTexture(texture)
+          })
+        )
+      }
     }
   }
 
   await Promise.allSettled(promiseArray)
-  console.log({ promiseArray, promiseDict })
 
   mat.map = promiseDict.diffuse ? promiseDict.diffuse : null
   mat.metalnessMap = promiseDict.metal ? promiseDict.metal : null
@@ -423,18 +603,50 @@ const applyMaterial = async (mesh) => {
   mat.normalMap = promiseDict.normal ? promiseDict.normal : null
   mat.displacementMap = promiseDict.disp ? promiseDict.disp : null
 
+  let delayInc = 0
+  for (const [name, group] of Object.entries(meshForChannels)) {
+    const mat = group.vis_textureMesh.material
+    const wasActive = mat.map ? true : false
+    const text = group.vis_textMesh
+    mat.map = promiseDict[name] ? promiseDict[name] : null
+
+    // text.position.y = mat.map ? 0.5 : 0
+    // text.color = mat.map ? 0x00ff00 : 0xff0000
+
+    text.sync()
+    mat.needsUpdate = true
+
+    const startY = text.position.y
+    const endY = mat.map ? 0.5 : 0
+    const startCol = colorAny.copy(mat.color)
+    const endCol = mat.map ? colorWhite : colorBlack
+
+    const startTextCol = wasActive ? colorGreen : colorRed
+    const endTextColor = mat.map ? colorGreen : colorRed
+
+    // TODO : animate all to empty state at the beginning
+    if (text.position.y !== endY) {
+      const dummyObj = { val: 0 }
+      new Tween(dummyObj)
+        .to({ val: 1 })
+        .duration(1000)
+        .delay(500 + delayInc)
+        .easing(Easing.Quadratic.InOut)
+        .onUpdate(() => {
+          text.position.y = MathUtils.lerp(startY, endY, dummyObj.val)
+          mat.color.lerpColors(startCol, endCol, dummyObj.val)
+          text.color = colorAny
+            .lerpColors(startTextCol, endTextColor, dummyObj.val)
+            .getHex()
+        })
+        .start()
+      delayInc += 200
+    }
+  }
+
+  updateMasterRepeat(mat)
+
   mat.needsUpdate = true
 
   addMaterialGui(mesh)
-}
-
-// function getImageUrl(name) {
-//   return new URL(`../materials/${name}`, import.meta.url).href
-// }
-
-class MaterialPreset {
-  constructor() {
-    this.selectedMaterial = null
-    this.format = "webP" // webP || ktx
-  }
 }

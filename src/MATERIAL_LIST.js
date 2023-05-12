@@ -44,4 +44,9 @@ export const MATERIAL_LIST = {
       normal: "./materials/wooden_rough_planks_nor_gl_1k.webp",
     },
   },
+
+  empty: {
+    name: "Empty",
+    textures: {},
+  },
 }
