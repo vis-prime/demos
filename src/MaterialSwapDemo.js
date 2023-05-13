@@ -277,34 +277,6 @@ class MaterialPreset {
 }
 
 /**
- * Object representing a mesh for different channels.
- * @typedef {Object} MeshForChannels
- * @property {Group} diffuse - The mesh for the diffuse channel.
- * @property {Group} rough - The mesh for the roughness channel.
- * @property {Group} metal - The mesh for the metalness channel.
- * @property {Group} emit - The mesh for the emissive channel.
- * @property {Group} normal - The mesh for the normal channel.
- * @property {Group} ao - The mesh for the ambient occlusion channel.
- * @property {Group} displace - The mesh for the displacement channel.
- */
-
-const texMeshGeometry = new PlaneGeometry()
-
-/**
- * Object representing meshes for different channels.
- * @type {MeshForChannels}
- */
-const meshForChannels = {
-  diffuse: null,
-  rough: null,
-  metal: null,
-  normal: null,
-  emit: null,
-  ao: null,
-  displace: null,
-}
-
-/**
  * Material used for display.
  * @type {THREE.MeshPhysicalMaterial & { vis_materialPreset: MaterialPreset }}
  */
@@ -337,6 +309,80 @@ const meshForDisplay = {
   octahedron: null,
 }
 
+/**
+ * Represents the parameters for a specific channel.
+ * @typedef {Object} ChannelParams
+ * @property {Group} group - The group associated with the channel.
+ * @property {Mesh} mesh - The mesh associated with the channel.
+ * @property {Text} text - The text element associated with the channel.
+ * @property {Tween} tween - The tween object associated with the channel.
+ * @property {number} lerpValue - The lerp value of the channel.
+ * @property {boolean} isActive - State of this channel
+ * @property {Object} tweenABvalues - The start and end values for the tween.
+ * @property {Vector3} tweenABvalues.meshStartPos - The starting position of the mesh.
+ * @property {Vector3} tweenABvalues.meshEndPos - The ending position of the mesh.
+ * @property {Vector3} tweenABvalues.textStartPos - The starting position of the text.
+ * @property {Vector3} tweenABvalues.textEndPos - The ending position of the text.
+ * @property {Color} tweenABvalues.meshStartColor - The starting color of the mesh.
+ * @property {Color} tweenABvalues.meshEndColor - The ending color of the mesh.
+ * @property {Color} tweenABvalues.textStartColor - The starting color of the text.
+ * @property {Color} tweenABvalues.textEndColor - The ending color of the text.
+ */
+
+/**
+ * Creates a new channel parameters entry.
+ * @returns {ChannelParams} The newly created channel parameters entry.
+ */
+function createChannelParamsEntry() {
+  return {
+    group: null,
+    mesh: null,
+    text: null,
+    tween: null,
+    lerpValue: 0,
+    isActive: false,
+    tweenABvalues: {
+      meshStartPos: new Vector3(),
+      meshEndPos: new Vector3(),
+      textStartPos: new Vector3(),
+      textEndPos: new Vector3(),
+
+      meshStartColor: new Color(),
+      meshEndColor: new Color(),
+      textStartColor: new Color(),
+      textEndColor: new Color(),
+    },
+  }
+}
+
+/**
+ * Represents the channel parameters.
+ * @typedef {Object} ChannelParamsObject
+ * @property {ChannelParams} diffuse - The parameters for the diffuse channel.
+ * @property {ChannelParams} rough - The parameters for the rough channel.
+ * @property {ChannelParams} metal - The parameters for the metal channel.
+ * @property {ChannelParams} normal - The parameters for the normal channel.
+ * @property {ChannelParams} emit - The parameters for the emit channel.
+ * @property {ChannelParams} ao - The parameters for the ao channel.
+ * @property {ChannelParams} displace - The parameters for the displace channel.
+ */
+
+/**
+ * Represents the channel parameters for a set of channels.
+ * @type {ChannelParamsObject}
+ */
+const channelParams = {
+  diffuse: createChannelParamsEntry(),
+  rough: createChannelParamsEntry(),
+  metal: createChannelParamsEntry(),
+  normal: createChannelParamsEntry(),
+  emit: createChannelParamsEntry(),
+  ao: createChannelParamsEntry(),
+  displace: createChannelParamsEntry(),
+}
+
+const channelMeshesGroup = new Group()
+
 function setupStage() {
   const platform = new Mesh(
     new CylinderGeometry(2.5, 3, 0.1, 48).translate(0, 0.05, 0),
@@ -344,42 +390,46 @@ function setupStage() {
   )
   scene.add(platform)
 
-  const names = Object.keys(meshForChannels)
-
+  const names = Object.keys(channelParams)
   const count = names.length,
     width = 1,
     padding = 0.4
-
-  for (let index = 0; index < count; index++) {
-    const name = names[index]
-    const grp = new Group()
-    meshForChannels[name] = grp
-    grp.vis_textureMesh = new Mesh(
-      texMeshGeometry,
+  let index = 0
+  const planeGeometry = new PlaneGeometry()
+  for (const [name, item] of Object.entries(channelParams)) {
+    item.group = new Group()
+    item.mesh = new Mesh(
+      planeGeometry,
       new MeshBasicMaterial({ color: 0x000000 })
     )
 
-    const sdfText = new Text()
-
-    sdfText.anchorY = "50%"
-    sdfText.anchorX = "center"
-
-    sdfText.text = name.toUpperCase()
-    sdfText.fontSize = 0.15
-    sdfText.material.side = FrontSide
-    sdfText.position.set(0, 0, 0.01)
-    sdfText.color = 0xff0000
-    sdfText.outlineWidth = "5%"
-    sdfText.sync()
-    grp.vis_textMesh = sdfText
-    grp.add(grp.vis_textureMesh, sdfText)
+    item.text = new Text()
+    item.text.anchorY = "50%"
+    item.text.anchorX = "center"
+    item.text.text = name.toUpperCase()
+    item.text.fontSize = 0.15
+    item.text.material.side = FrontSide
+    item.text.position.set(0, 0, 0.01)
+    item.text.color = 0xff0000
+    item.text.outlineWidth = "5%"
+    item.text.sync()
+    item.group.add(item.mesh, item.text)
 
     const paddedWidth = width + padding
     const X = paddedWidth * index - (paddedWidth * count) / 2 + padding
-    grp.position.set(X, 1.5, -5)
+    item.group.position.set(X, 1.5, -5)
+
+    item.tween = new Tween(item)
+      .to({ lerpValue: 1 })
+      .easing(Easing.Quadratic.InOut)
+
+    channelMeshesGroup.add(item.group)
+    index++
   }
 
-  scene.add(...Object.values(meshForChannels))
+  scene.add(channelMeshesGroup)
+
+  // Meshes for material display
 
   meshForDisplay.box = new Mesh(
     new BoxGeometry(width, width, width, 10, 10, 10),
@@ -477,11 +527,28 @@ function addMaterialGui(mesh) {
   matGui.add(mat.vis_materialPreset, "masterRepeat", 0.1, 5).onChange(() => {
     updateMasterRepeat(mat)
   })
+
+  const test = {
+    togOn: async () => {
+      await toggleTextureMeshes(true, {}, true)
+      console.log("complete!")
+    },
+
+    togOff: async () => {
+      await toggleTextureMeshes(false, {}, true)
+      console.log("complete!")
+    },
+  }
+
+  // matGui.add(test, "off")
+  // matGui.add(test, "on")
+  matGui.add(test, "togOn")
+  matGui.add(test, "togOff")
 }
 
 /**
  * Update repeat
- * @param { * @type {THREE.MeshPhysicalMaterial & { vis_materialPreset: MaterialPreset }}}
+ * @param {THREE.MeshPhysicalMaterial & { vis_materialPreset: MaterialPreset }}
  */
 function updateMasterRepeat(material) {
   for (const tex of Object.values(material)) {
@@ -549,7 +616,7 @@ const applyMaterial = async (mesh) => {
   const mat = mesh.material
 
   /**
-   * @type {MaterialPreset}
+   * @type { {THREE.MeshPhysicalMaterial & { vis_materialPreset: MaterialPreset }} }
    */
   const presetData = mat.vis_materialPreset
 
@@ -595,6 +662,8 @@ const applyMaterial = async (mesh) => {
     }
   }
 
+  promiseArray.push(toggleTextureMeshes(false))
+
   await Promise.allSettled(promiseArray)
 
   mat.map = promiseDict.diffuse ? promiseDict.diffuse : null
@@ -603,50 +672,99 @@ const applyMaterial = async (mesh) => {
   mat.normalMap = promiseDict.normal ? promiseDict.normal : null
   mat.displacementMap = promiseDict.disp ? promiseDict.disp : null
 
-  let delayInc = 0
-  for (const [name, group] of Object.entries(meshForChannels)) {
-    const mat = group.vis_textureMesh.material
-    const wasActive = mat.map ? true : false
-    const text = group.vis_textMesh
-    mat.map = promiseDict[name] ? promiseDict[name] : null
-
-    // text.position.y = mat.map ? 0.5 : 0
-    // text.color = mat.map ? 0x00ff00 : 0xff0000
-
-    text.sync()
-    mat.needsUpdate = true
-
-    const startY = text.position.y
-    const endY = mat.map ? 0.5 : 0
-    const startCol = colorAny.copy(mat.color)
-    const endCol = mat.map ? colorWhite : colorBlack
-
-    const startTextCol = wasActive ? colorGreen : colorRed
-    const endTextColor = mat.map ? colorGreen : colorRed
-
-    // TODO : animate all to empty state at the beginning
-    if (text.position.y !== endY) {
-      const dummyObj = { val: 0 }
-      new Tween(dummyObj)
-        .to({ val: 1 })
-        .duration(1000)
-        .delay(500 + delayInc)
-        .easing(Easing.Quadratic.InOut)
-        .onUpdate(() => {
-          text.position.y = MathUtils.lerp(startY, endY, dummyObj.val)
-          mat.color.lerpColors(startCol, endCol, dummyObj.val)
-          text.color = colorAny
-            .lerpColors(startTextCol, endTextColor, dummyObj.val)
-            .getHex()
-        })
-        .start()
-      delayInc += 200
-    }
-  }
+  await toggleTextureMeshes(true, promiseDict)
 
   updateMasterRepeat(mat)
 
   mat.needsUpdate = true
 
   addMaterialGui(mesh)
+}
+
+async function toggleTextureMeshes(state, textureDict = {}, test) {
+  console.log("TOGGLE", state)
+  let delayInc = 0
+  const promiseArray = []
+
+  for (const [name, item] of Object.entries(channelParams)) {
+    if (state === item.isActive) continue
+
+    item.isActive = state
+
+    const channelTexture = textureDict[name] || (test && state)
+
+    const mat = item.mesh.material
+
+    if (!test) {
+      if (state) {
+        // if texture exists , apply and tween
+        if (channelTexture) {
+          mat.map = channelTexture
+          mat.needsUpdate = true
+        } else if (!mat.map) {
+          // if no texture to be applied and there's no texture on mat, continue
+          continue
+        }
+      }
+
+      if (!state && !mat.map) {
+        // when disabling if texture does not exist no need to tween
+        continue
+      }
+    }
+
+    const text = item.text
+    const tween = item.tween
+
+    const meshStartColor = item.tweenABvalues.meshStartColor
+    const meshEndColor = item.tweenABvalues.meshEndColor
+    meshStartColor.copy(mat.color)
+    meshEndColor.copy(channelTexture ? colorWhite : colorBlack)
+
+    const textStartColor = item.tweenABvalues.textStartColor
+    const textEndColor = item.tweenABvalues.textEndColor
+    textStartColor.setHex(text.color)
+    textEndColor.copy(channelTexture ? colorGreen : colorRed)
+
+    const textStartPos = item.tweenABvalues.textStartPos
+    const textEndPos = item.tweenABvalues.textEndPos
+    textStartPos.copy(text.position)
+    textEndPos.copy(text.position)
+    textEndPos.y = channelTexture ? 0.5 : 0
+
+    tween.stop()
+    tween.onUpdate(() => {
+      // console.log(state, item.lerpValue.toFixed(2))
+      text.position.lerpVectors(textStartPos, textEndPos, item.lerpValue)
+      mat.color.lerpColors(meshStartColor, meshEndColor, item.lerpValue)
+      text.color = colorAny
+        .lerpColors(textStartColor, textEndColor, item.lerpValue)
+        .getHex()
+    })
+
+    tween.delay(delayInc)
+    tween.duration(1000)
+    delayInc += 200
+
+    promiseArray.push(
+      new Promise((resolve) =>
+        tween.onComplete(() => {
+          if (!state) {
+            mat.map = null
+            mat.needsUpdate = true
+          }
+          resolve()
+        })
+      )
+    )
+
+    tween.start()
+  }
+
+  console.log({ state, promiseArray })
+  return Promise.all(promiseArray)
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
