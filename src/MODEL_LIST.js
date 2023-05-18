@@ -1,12 +1,5 @@
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader"
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader"
-import bobaUrl from "./boba_comp.glb?url"
-import wallUrl from "./thickness_wall_comp.glb?url"
-import horseUrl from "./horse_comp.glb?url"
-import aztecUrl from "./aztec_pole_2k_comp.glb?url"
-import catUrl from "./cat_2k_comp.glb?url"
-import mournerUrl from "./mourner_2k_comp.glb?url"
-import demonUrl from "./crowned_demon_2k_comp.glb?url"
 
 const gltfLoader = new GLTFLoader()
 const draco = new DRACOLoader()
@@ -19,31 +12,35 @@ gltfLoader.setDRACOLoader(draco)
  */
 export const MODEL_LIST = {
   boba: {
-    url: bobaUrl,
+    url: "./models/boba_comp.glb",
   },
   thick: {
-    url: wallUrl,
+    url: "./models/thickness_wall_comp.glb",
   },
   horse: {
     name: "Horse",
-    url: horseUrl,
+    url: "./models/horse_comp.glb",
   },
   aztec: {
     name: "Aztec",
-    url: aztecUrl,
+    url: "./models/aztec_pole_2k_comp.glb",
     attribution: `"Aztec Statue Sculpt" (https://skfb.ly/6SIEP) by POLYCOSM is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).`,
   },
   cat: {
     name: "Cat",
-    url: catUrl,
+    url: "./models/cat_2k_comp.glb",
   },
   mourner: {
     name: "Mourner",
-    url: mournerUrl,
+    url: "./models/mourner_2k_comp.glb",
   },
   crowned_demon: {
     name: "Crowned Demon bust",
-    url: demonUrl,
+    url: "./models/crowned_demon_2k_comp.glb",
+  },
+  platform: {
+    name: "Material display platform",
+    url: "./models/mats_platform_2k_comp.glb",
   },
 }
 

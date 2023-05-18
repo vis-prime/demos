@@ -24,7 +24,7 @@ import {
 } from "three"
 
 // Model and Env
-import { MODEL_LIST, MODEL_LOADER } from "../models/MODEL_LIST"
+import { MODEL_LIST, MODEL_LOADER } from "./MODEL_LIST"
 import { BG_ENV } from "../helpers/BG_ENV"
 import { Easing, Tween, update } from "@tweenjs/tween.js"
 import { HDRI_LIST } from "../hdri/HDRI_LIST"

@@ -1,8 +1,6 @@
 import Stats from "three/examples/jsm/libs/stats.module"
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader"
-import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader"
+
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls"
-import { TransformControls } from "three/examples/jsm/controls/TransformControls"
 import {
   ACESFilmicToneMapping,
   PerspectiveCamera,
@@ -41,6 +39,11 @@ import { HDRI_LIST } from "../hdri/HDRI_LIST"
 import { MATERIAL_LIST } from "./MATERIAL_LIST"
 import { MeshBasicMaterial } from "three"
 import { Text } from "troika-three-text"
+import { MODEL_LIST, MODEL_LOADER } from "./MODEL_LIST"
+import {
+  channelParams,
+  showcaseMeshes,
+} from "./constants/MaterialSwapConstants"
 
 let stats,
   /**
@@ -55,11 +58,7 @@ let stats,
   pointer = new Vector2()
 
 const mainObjects = new Group()
-const gltfLoader = new GLTFLoader()
-const draco = new DRACOLoader()
-let transformControls
-draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.5/")
-gltfLoader.setDRACOLoader(draco)
+
 const raycaster = new Raycaster()
 const intersects = [] //raycast
 
@@ -114,6 +113,7 @@ export default async function MaterialSwapDemo(mainGui) {
   camera.position.set(5, 2, 5)
   // scene
   scene = new Scene()
+  scene.environmentIntensity = 1
   scene.add(mainObjects)
 
   // custom vector to perform focus
@@ -127,22 +127,6 @@ export default async function MaterialSwapDemo(mainGui) {
   controls.maxDistance = 100
   controls.maxPolarAngle = Math.PI / 1.5
   controls.target.set(0, 1, 0)
-
-  transformControls = new TransformControls(camera, renderer.domElement)
-  transformControls.addEventListener("dragging-changed", (event) => {
-    controls.enabled = !event.value
-    if (!event.value) {
-    }
-  })
-
-  transformControls.addEventListener("change", () => {
-    if (transformControls.object) {
-      if (transformControls.object.position.y < 0) {
-        transformControls.object.position.y = 0
-      }
-    }
-  })
-  scene.add(transformControls)
 
   window.addEventListener("resize", onWindowResize)
   document.addEventListener("pointermove", onPointerMove)
@@ -158,11 +142,12 @@ export default async function MaterialSwapDemo(mainGui) {
     }
   })
 
-  // sceneGui.add(transformControls, "mode", ["translate", "rotate", "scale"])
   bg_env = new BG_ENV(scene, renderer)
   bg_env.sunEnabled = true
   bg_env.shadowFloorEnabled = true
   bg_env.setEnvType("HDRI")
+  bg_env.setBGType("Color")
+  bg_env.bgColor.set("#3a4573")
   bg_env.addGui(sceneGui)
 
   await setupAssets()
@@ -227,16 +212,15 @@ function raycast() {
   raycaster.intersectObject(mainObjects, true, intersects)
 
   if (!intersects.length) {
-    transformControls.detach()
     return
   }
+  const mesh = intersects[0].object
+  if (mesh.vis_positionBackup) toggleFocusMesh(intersects[0].object)
 
-  if (intersects[0].object.selectOnRaycast) {
-    transformControls.attach(intersects[0].object.selectOnRaycast)
-  } else {
-    transformControls.attach(intersects[0].object)
+  if (mesh.vis_channel) {
+    console.log(mesh)
   }
-  addMaterialGui(intersects[0].object)
+
   intersects.length = 0
 }
 
@@ -282,113 +266,15 @@ class MaterialPreset {
  */
 const displayMaterial = new MeshPhysicalMaterial()
 displayMaterial.vis_materialPreset = new MaterialPreset()
-
-/**
- * Object representing meshes for display.
- * @typedef {Object} MeshForDisplay
- * @property {Mesh} box - The mesh representing a box.
- * @property {Mesh} sphere - The mesh representing a sphere.
- * @property {Mesh} cylinder - The mesh representing a cylinder.
- * @property {Mesh} torus - The mesh representing a torus.
- * @property {Mesh} torusKnot - The mesh representing a torus knot.
- * @property {Mesh} plane - The mesh representing a plane.
- * @property {Mesh} octahedron - The mesh representing a octahedron.
- */
-
-/**
- * Object containing meshes for display.
- * @type {MeshForDisplay}
- */
-const meshForDisplay = {
-  box: null,
-  sphere: null,
-  cylinder: null,
-  torus: null,
-  torusKnot: null,
-  plane: null,
-  octahedron: null,
-}
-
-/**
- * Represents the parameters for a specific channel.
- * @typedef {Object} ChannelParams
- * @property {Group} group - The group associated with the channel.
- * @property {Mesh} mesh - The mesh associated with the channel.
- * @property {Text} text - The text element associated with the channel.
- * @property {Tween} tween - The tween object associated with the channel.
- * @property {number} lerpValue - The lerp value of the channel.
- * @property {boolean} isActive - State of this channel
- * @property {Object} tweenABvalues - The start and end values for the tween.
- * @property {Vector3} tweenABvalues.meshStartPos - The starting position of the mesh.
- * @property {Vector3} tweenABvalues.meshEndPos - The ending position of the mesh.
- * @property {Vector3} tweenABvalues.textStartPos - The starting position of the text.
- * @property {Vector3} tweenABvalues.textEndPos - The ending position of the text.
- * @property {Color} tweenABvalues.meshStartColor - The starting color of the mesh.
- * @property {Color} tweenABvalues.meshEndColor - The ending color of the mesh.
- * @property {Color} tweenABvalues.textStartColor - The starting color of the text.
- * @property {Color} tweenABvalues.textEndColor - The ending color of the text.
- */
-
-/**
- * Creates a new channel parameters entry.
- * @returns {ChannelParams} The newly created channel parameters entry.
- */
-function createChannelParamsEntry() {
-  return {
-    group: null,
-    mesh: null,
-    text: null,
-    tween: null,
-    lerpValue: 0,
-    isActive: false,
-    tweenABvalues: {
-      meshStartPos: new Vector3(),
-      meshEndPos: new Vector3(),
-      textStartPos: new Vector3(),
-      textEndPos: new Vector3(),
-
-      meshStartColor: new Color(),
-      meshEndColor: new Color(),
-      textStartColor: new Color(),
-      textEndColor: new Color(),
-    },
-  }
-}
-
-/**
- * Represents the channel parameters.
- * @typedef {Object} ChannelParamsObject
- * @property {ChannelParams} diffuse - The parameters for the diffuse channel.
- * @property {ChannelParams} rough - The parameters for the rough channel.
- * @property {ChannelParams} metal - The parameters for the metal channel.
- * @property {ChannelParams} normal - The parameters for the normal channel.
- * @property {ChannelParams} emit - The parameters for the emit channel.
- * @property {ChannelParams} ao - The parameters for the ao channel.
- * @property {ChannelParams} displace - The parameters for the displace channel.
- */
-
-/**
- * Represents the channel parameters for a set of channels.
- * @type {ChannelParamsObject}
- */
-const channelParams = {
-  diffuse: createChannelParamsEntry(),
-  rough: createChannelParamsEntry(),
-  metal: createChannelParamsEntry(),
-  normal: createChannelParamsEntry(),
-  emit: createChannelParamsEntry(),
-  ao: createChannelParamsEntry(),
-  displace: createChannelParamsEntry(),
-}
+const twObj = { val: 0 }
+displayMaterial.vis_tween = new Tween(twObj).to({ val: 1 })
 
 const channelMeshesGroup = new Group()
 
-function setupStage() {
-  const platform = new Mesh(
-    new CylinderGeometry(2.5, 3, 0.1, 48).translate(0, 0.05, 0),
-    new MeshStandardMaterial({ color: "grey", roughness: 0.5 })
-  )
-  scene.add(platform)
+async function setupStage() {
+  const gltf = await MODEL_LOADER(MODEL_LIST.platform.url)
+
+  scene.add(gltf.scene)
 
   const names = Object.keys(channelParams)
   const count = names.length,
@@ -402,8 +288,12 @@ function setupStage() {
       planeGeometry,
       new MeshBasicMaterial({ color: 0x000000 })
     )
-
+    item.mesh.name = name
+    item.mesh.vis_channel = name
     item.text = new Text()
+
+    item.text.name = name
+    item.text.vis_channel = name
     item.text.anchorY = "50%"
     item.text.anchorX = "center"
     item.text.text = name.toUpperCase()
@@ -417,7 +307,7 @@ function setupStage() {
 
     const paddedWidth = width + padding
     const X = paddedWidth * index - (paddedWidth * count) / 2 + padding
-    item.group.position.set(X, 1.5, -5)
+    item.group.position.set(X, 1.5, 0)
 
     item.tween = new Tween(item)
       .to({ lerpValue: 1 })
@@ -426,57 +316,57 @@ function setupStage() {
     channelMeshesGroup.add(item.group)
     index++
   }
-
-  scene.add(channelMeshesGroup)
+  channelMeshesGroup.position.set(0, 0, -1.95)
+  mainObjects.add(channelMeshesGroup)
 
   // Meshes for material display
 
-  meshForDisplay.box = new Mesh(
+  showcaseMeshes.box.mesh = new Mesh(
     new BoxGeometry(width, width, width, 10, 10, 10),
     displayMaterial
   )
-  meshForDisplay.sphere = new Mesh(
+  showcaseMeshes.sphere.mesh = new Mesh(
     new SphereGeometry(width / 2),
     displayMaterial
   )
-  meshForDisplay.cylinder = new Mesh(
+  showcaseMeshes.cylinder.mesh = new Mesh(
     new CylinderGeometry(width / 2, width / 2, width),
     displayMaterial
   )
-  meshForDisplay.torus = new Mesh(
+  showcaseMeshes.torus.mesh = new Mesh(
     new TorusGeometry(width / 3, width / 8),
     displayMaterial
   )
-  meshForDisplay.torusKnot = new Mesh(
+  showcaseMeshes.torusKnot.mesh = new Mesh(
     new TorusKnotGeometry(width / 4, width / 8),
     displayMaterial
   )
-  meshForDisplay.plane = new Mesh(
+  showcaseMeshes.plane.mesh = new Mesh(
     new PlaneGeometry(width, width, 10, 10)
       .rotateX(-Math.PI / 2)
       .translate(0, -width / 2, 0),
     displayMaterial
   )
-  meshForDisplay.octahedron = new Mesh(
+  showcaseMeshes.octahedron.mesh = new Mesh(
     new OctahedronGeometry(width / 2),
     displayMaterial
   )
 
-  const meshes = Object.values(meshForDisplay)
+  const dat = Object.values(showcaseMeshes)
 
-  const meshCount = meshes.length,
+  const meshCount = dat.length,
     meshPadding = 0.4
 
   for (let index = 0; index < meshCount; index++) {
-    const m = meshes[index]
+    const m = dat[index].mesh
     m.geometry.translate(0, width / 2, 0)
 
     const paddedWidth = width + meshPadding
     const X = paddedWidth * index - (paddedWidth * count) / 2 + meshPadding
     m.position.set(X, 0, 3)
+    m.vis_positionBackup = m.position.clone()
+    mainObjects.add(m)
   }
-
-  mainObjects.add(...meshes)
 }
 
 async function setupAssets() {
@@ -485,6 +375,7 @@ async function setupAssets() {
 
   bg_env.preset = HDRI_LIST.skidpan
   bg_env.updateAll()
+  bg_env.sunLight.intensity = 0.1
 
   setupStage()
 }
@@ -670,7 +561,7 @@ const applyMaterial = async (mesh) => {
   mat.metalnessMap = promiseDict.metal ? promiseDict.metal : null
   mat.roughnessMap = promiseDict.rough ? promiseDict.rough : null
   mat.normalMap = promiseDict.normal ? promiseDict.normal : null
-  mat.displacementMap = promiseDict.disp ? promiseDict.disp : null
+  mat.displacementMap = promiseDict.displace ? promiseDict.displace : null
 
   await toggleTextureMeshes(true, promiseDict)
 
@@ -730,7 +621,7 @@ async function toggleTextureMeshes(state, textureDict = {}, test) {
     const textEndPos = item.tweenABvalues.textEndPos
     textStartPos.copy(text.position)
     textEndPos.copy(text.position)
-    textEndPos.y = channelTexture ? 0.5 : 0
+    textEndPos.y = channelTexture ? -0.65 : 0
 
     tween.stop()
     tween.onUpdate(() => {
@@ -765,6 +656,62 @@ async function toggleTextureMeshes(state, textureDict = {}, test) {
   return Promise.all(promiseArray)
 }
 
+async function toggleDisplayMaterial(state, textureDict = {}) {
+  return new Promise((resolve) => {})
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+const pedestalPos = new Vector3(0, 1, 0)
+function toggleFocusMesh(selectedMesh) {
+  addMaterialGui(selectedMesh)
+
+  for (const [key, val] of Object.entries(showcaseMeshes)) {
+    if (!val.tween) {
+      val.tween = new Tween(val.mesh.position).easing(Easing.Quadratic.Out)
+      val.spinTween = new Tween(val.mesh.rotation)
+        // .easing(Easing.Quadratic.InOut)
+        .repeat(1000)
+        .duration(20000)
+    }
+
+    const { tween, spinTween, mesh } = val
+
+    console.log({ key, val })
+
+    if (selectedMesh === mesh) {
+      // selected mesh
+
+      //check if already active
+      if (!val.isActive) {
+        val.isActive = true
+        console.log("active", mesh.name)
+        tween.to(pedestalPos)
+        tween.onUpdate((e, elapsed) => {
+          mesh.scale.setScalar(MathUtils.lerp(1, 2, elapsed))
+        })
+        tween.startFromCurrentValues()
+        spinTween.to({ y: 2 * Math.PI })
+        spinTween.startFromCurrentValues()
+      }
+    }
+    // other meshes
+
+    // check if active and deactivate
+    else if (val.isActive) {
+      val.isActive = false
+      tween.stop()
+      spinTween.stop()
+      tween.to(mesh.vis_positionBackup)
+      const startScale = mesh.scale.x
+      const startRotY = mesh.rotation.y
+      tween.onUpdate((e, elapsed) => {
+        mesh.scale.setScalar(MathUtils.lerp(startScale, 1, elapsed))
+        mesh.rotation.y = MathUtils.lerp(startRotY, 0, elapsed)
+      })
+      tween.startFromCurrentValues()
+    }
+  }
 }
