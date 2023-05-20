@@ -217,6 +217,8 @@ function raycast() {
   const mesh = intersects[0].object
   if (mesh.vis_positionBackup) toggleFocusMesh(intersects[0].object)
 
+  if (mesh.vis_materialToSelect) applyMaterial(mesh.vis_materialToSelect)
+
   if (mesh.vis_channel) {
     console.log(mesh)
   }
@@ -378,13 +380,54 @@ async function setupAssets() {
   bg_env.sunLight.intensity = 0.1
 
   setupStage()
+
+  setupMaterialSelector()
+}
+
+function setupMaterialSelector() {
+  const materialSelectorGroup = new Group()
+  materialSelectorGroup.position.set(0, 0.1, 4)
+  mainObjects.add(materialSelectorGroup)
+
+  let index = 0,
+    width = 0.5,
+    height = 0.1,
+    padding = 0.1
+
+  const geo = new PlaneGeometry(width, height)
+  const count = Object.keys(MATERIAL_LIST).length
+  for (const [name, preset] of Object.entries(MATERIAL_LIST)) {
+    const meshPlate = new Mesh(geo, new MeshBasicMaterial())
+    const textMesh = new Text()
+    textMesh.text = name
+
+    textMesh.text = name.toUpperCase()
+    textMesh.fontSize = 0.05
+    textMesh.material.side = FrontSide
+    textMesh.color = 0xff00ff
+    textMesh.outlineWidth = "5%"
+    textMesh.anchorX = "center"
+    textMesh.anchorY = "middle"
+    textMesh.sync()
+    materialSelectorGroup.add(meshPlate, textMesh)
+
+    const paddedWidth = width + padding
+    const X = paddedWidth * index - (paddedWidth * count) / 2 + padding
+    meshPlate.position.x = X
+    textMesh.position.x = X
+    textMesh.position.z = 0.01
+
+    textMesh.vis_materialToSelect = preset
+    meshPlate.vis_materialToSelect = preset
+    index++
+  }
 }
 
 /**
  * Create mat gui
  * @param {Mesh} mesh
  */
-function addMaterialGui(mesh) {
+function addMaterialGui() {
   if (matGui) {
     for (const child of matGui.children) {
       child.updateDisplay()
@@ -393,13 +436,13 @@ function addMaterialGui(mesh) {
     return
   }
 
-  matGui = gui.addFolder(mesh.name)
+  matGui = gui.addFolder("Material")
   matGui.open()
 
   /**
    * @type {MeshStandardMaterial}
    */
-  const mat = mesh.material
+  const mat = displayMaterial
   matGui.addColor(mat, "color")
   matGui.add(mat, "roughness", 0, 1)
   matGui.add(mat, "metalness", 0, 1)
@@ -409,15 +452,17 @@ function addMaterialGui(mesh) {
   matGui
     .add(mat.vis_materialPreset, "pbrPreset", MATERIAL_LIST)
     .onChange(() => {
-      applyMaterial(mesh)
+      applyMaterial()
     })
   matGui.add(mat.vis_materialPreset, "format", ["webP", "ktx"]).onChange(() => {
-    applyMaterial(mesh)
+    applyMaterial()
   })
 
-  matGui.add(mat.vis_materialPreset, "masterRepeat", 0.1, 5).onChange(() => {
-    updateMasterRepeat(mat)
-  })
+  matGui
+    .add(mat.vis_materialPreset, "masterRepeat", 0.1, 5, 0.1)
+    .onChange(() => {
+      updateMasterRepeat(mat)
+    })
 
   const test = {
     togOn: async () => {
@@ -500,18 +545,21 @@ const textureLoader = new TextureLoader()
  * Apply mat
  * @param {Mesh} mesh
  */
-const applyMaterial = async (mesh) => {
+const applyMaterial = async (preset) => {
   /**
    * @type {MeshStandardMaterial}
    */
-  const mat = mesh.material
+  const mat = displayMaterial
 
   /**
    * @type { {THREE.MeshPhysicalMaterial & { vis_materialPreset: MaterialPreset }} }
    */
   const presetData = mat.vis_materialPreset
 
+  presetData.pbrPreset = preset ? preset : presetData.pbrPreset
   const pbrPreset = presetData.pbrPreset
+
+  console.log(pbrPreset)
 
   if (!pbrPreset) return
 
@@ -561,15 +609,14 @@ const applyMaterial = async (mesh) => {
   mat.metalnessMap = promiseDict.metal ? promiseDict.metal : null
   mat.roughnessMap = promiseDict.rough ? promiseDict.rough : null
   mat.normalMap = promiseDict.normal ? promiseDict.normal : null
-  mat.displacementMap = promiseDict.displace ? promiseDict.displace : null
-
-  await toggleTextureMeshes(true, promiseDict)
+  // mat.displacementMap = promiseDict.displace ? promiseDict.displace : null
 
   updateMasterRepeat(mat)
+  await toggleTextureMeshes(true, promiseDict)
 
   mat.needsUpdate = true
 
-  addMaterialGui(mesh)
+  addMaterialGui()
 }
 
 async function toggleTextureMeshes(state, textureDict = {}, test) {

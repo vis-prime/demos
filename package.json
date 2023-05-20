@@ -15,7 +15,7 @@
     "@tweenjs/tween.js": "^19.0.0",
     "gh-pages": "^5.0.0",
     "lil-gui": "^0.18.1",
-    "n8ao": "^1.0.5",
+    "n8ao": "^1.1.2",
     "postprocessing": "^6.31.0",
     "realism-effects": "^1.0.19",
     "three": "^0.151.3",
