@@ -19,6 +19,8 @@
     "postprocessing": "^6.31.0",
     "realism-effects": "^1.0.19",
     "three": "^0.151.3",
+    "three-bvh-csg": "^0.0.5",
+    "three-mesh-bvh": "^0.6.0",
     "troika-three-text": "^0.47.1",
     "vanilla-router": "^1.2.8",
     "vite-plugin-compression": "^0.5.1"
