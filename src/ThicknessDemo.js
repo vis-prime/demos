@@ -1,6 +1,4 @@
 import Stats from "three/examples/jsm/libs/stats.module"
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader"
-import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls"
 import { TransformControls } from "three/examples/jsm/controls/TransformControls"
 import {
@@ -24,7 +22,7 @@ import {
 } from "three"
 
 // Model and Env
-import { MODEL_LIST, MODEL_LOADER } from "../models/MODEL_LIST"
+import { MODEL_LIST, MODEL_LOADER } from "./MODEL_LIST"
 import { BG_ENV } from "../helpers/BG_ENV"
 import { Easing, Tween, update } from "@tweenjs/tween.js"
 import { HDRI_LIST } from "../hdri/HDRI_LIST"
@@ -41,11 +39,9 @@ let stats,
   pointer = new Vector2()
 
 const mainObjects = new Group()
-const gltfLoader = new GLTFLoader()
-const draco = new DRACOLoader()
+
 let transformControls
-draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.5/")
-gltfLoader.setDRACOLoader(draco)
+
 const raycaster = new Raycaster()
 const intersects = [] //raycast
 let sceneGui

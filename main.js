@@ -4,6 +4,8 @@ import Router from "vanilla-router"
 import { version } from "./package.json"
 import ThicknessDemo from "./src/ThicknessDemo"
 import MaterialSwapDemo from "./src/MaterialSwapDemo"
+import EffectsPlayground from "./src/EffectsPlayground"
+import CSGPlayground from "./src/CSGPlayground"
 
 const gui = new GUI({ title: "Demos: v" + version, closeFolders: true })
 if (window.innerWidth < window.innerHeight) {
@@ -22,6 +24,8 @@ const Demos = {
   Home: () => HomeDemo(),
   Thickness: ThicknessDemo,
   MaterialSwap: MaterialSwapDemo,
+  EffectsPlayground: EffectsPlayground,
+  CSGPlayground: CSGPlayground,
 }
 
 gui.add(params, "homeButton").name("🔙Home")
