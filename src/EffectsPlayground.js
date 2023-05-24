@@ -31,9 +31,17 @@ import {
 import { BG_ENV } from "../helpers/BG_ENV"
 import { Easing, Tween, update } from "@tweenjs/tween.js"
 import { HDRI_LIST } from "../hdri/HDRI_LIST"
-import { N8AOPass } from "n8ao"
-import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer"
-import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass"
+import { N8AOPostPass } from "n8ao"
+import {
+  EffectComposer,
+  RenderPass,
+  BloomEffect,
+  ChromaticAberrationEffect,
+  EffectPass,
+  SelectiveBloomEffect,
+  VignetteEffect,
+  DepthOfFieldEffect,
+} from "postprocessing"
 
 let stats,
   renderer,
@@ -62,6 +70,26 @@ let sceneGui
  * @type {BG_ENV}
  */
 let bg_env
+
+const allEffects = {
+  bloom: null,
+  chromaticAberration: null,
+  selectiveBloom: null,
+  depthOfField: null,
+  vignette: null,
+}
+
+let renderPass
+const allPasses = {
+  n8ao: null,
+}
+
+const allParams = {
+  n8ao: {},
+}
+
+const enabledEffects = []
+const enabledPasses = []
 
 export default async function EffectsPlayground(mainGui) {
   gui = mainGui
@@ -133,39 +161,7 @@ export default async function EffectsPlayground(mainGui) {
     }
   })
 
-  composer = new EffectComposer(renderer)
-  // N8AOPass replaces RenderPass
-  const renderPass = new RenderPass(scene, camera)
-  const n8aopass = new N8AOPass(scene, camera, 1024, 1024)
-  composer.addPass(n8aopass)
-  const obj = {
-    n8ao: true,
-    displayMode: "Combined",
-  }
-  const aoFol = gui.addFolder("n8ao")
-
-  aoFol.add(obj, "n8ao").onChange((v) => {
-    if (v) {
-      composer.removePass(renderPass)
-      composer.addPass(n8aopass)
-    } else {
-      composer.removePass(n8aopass)
-      composer.addPass(renderPass)
-    }
-  })
-  aoFol.open()
-  aoFol.add(n8aopass.configuration, "aoSamples", 1.0, 64.0, 1.0)
-  aoFol.add(n8aopass.configuration, "denoiseSamples", 1.0, 64.0, 1.0)
-  aoFol.add(n8aopass.configuration, "denoiseRadius", 0.0, 24.0, 0.01)
-  aoFol.add(n8aopass.configuration, "aoRadius", 0.01, 10.0, 0.01)
-  aoFol.add(n8aopass.configuration, "distanceFalloff", 0.0, 10.0, 0.01)
-  aoFol.add(n8aopass.configuration, "intensity", 0.0, 20.0, 0.01)
-
-  aoFol
-    .add(obj, "displayMode", ["Combined", "AO", "No AO", "Split", "Split AO"])
-    .onChange((v) => {
-      n8aopass.setDisplayMode(v)
-    })
+  setupEffects()
 
   // sceneGui.add(transformControls, "mode", ["translate", "rotate", "scale"])
   bg_env = new BG_ENV(scene, renderer)
@@ -430,4 +426,99 @@ const addParticles = () => {
 
   particleTween.start()
   scene.add(instancedParticles)
+}
+
+function setupEffects() {
+  composer = new EffectComposer(renderer)
+
+  renderPass = new RenderPass(scene, camera)
+  composer.addPass(renderPass)
+
+  allPasses.n8ao = new N8AOPostPass(scene, camera)
+
+  allEffects.bloom = new BloomEffect()
+  allEffects.chromaticAberration = new ChromaticAberrationEffect({
+    modulationOffset: 1,
+    offset: new Vector2(0.1, 0.1),
+    radialModulation: true,
+  })
+  allEffects.depthOfField = new DepthOfFieldEffect(camera)
+  allEffects.selectiveBloom = new SelectiveBloomEffect(scene, camera)
+  allEffects.vignette = new VignetteEffect()
+
+  // aoFol.open()
+  // aoFol.addColor(n8aopass.configuration, "color")
+  // aoFol.add(n8aopass.configuration, "aoSamples", 1.0, 64.0, 1.0)
+  // aoFol.add(n8aopass.configuration, "denoiseSamples", 1.0, 64.0, 1.0)
+  // aoFol.add(n8aopass.configuration, "denoiseRadius", 0.0, 24.0, 0.01)
+  // aoFol.add(n8aopass.configuration, "aoRadius", 0.01, 10.0, 0.01)
+  // aoFol.add(n8aopass.configuration, "distanceFalloff", 0.0, 10.0, 0.01)
+  // aoFol.add(n8aopass.configuration, "intensity", 0.0, 20.0, 0.01)
+
+  // aoFol
+  //   .add(obj, "displayMode", ["Combined", "AO", "No AO", "Split", "Split AO"])
+  //   .onChange((v) => {
+  //     n8aopass.setDisplayMode(v)
+  //   })
+  const effectsFol = gui.addFolder("POST PROCESSING")
+  const createToggle = (gui, folder, enabledItems, name, effect) => {
+    const guiToggle = {
+      enabled: false,
+      editFolder: null,
+    }
+
+    const destroy = () => {
+      if (guiToggle.editFolder) {
+        guiToggle.editFolder.destroy()
+        guiToggle.editFolder = null
+      }
+    }
+
+    gui
+      .add(guiToggle, "enabled")
+      .name(name)
+      .onChange((v) => {
+        updateEffects(enabledItems, effect)
+        if (v) {
+          guiToggle.editFolder = folder.addFolder(name)
+        } else {
+          destroy()
+        }
+      })
+  }
+
+  for (const [name, effect] of Object.entries(allPasses)) {
+    createToggle(effectsFol, effectsFol, enabledPasses, name, effect)
+  }
+
+  for (const [name, effect] of Object.entries(allEffects)) {
+    createToggle(effectsFol, effectsFol, enabledEffects, name, effect)
+  }
+}
+
+function updateEffects(array, item) {
+  const index = array.indexOf(item)
+
+  if (index === -1) {
+    // Item doesn't exist in the array, so add it
+    array.push(item)
+    console.log(array)
+  } else {
+    // Item exists in the array, so remove it
+    array.splice(index, 1)
+    console.log(array)
+  }
+
+  const oldPasses = [...composer.passes]
+  composer.removeAllPasses()
+
+  oldPasses.forEach((pass) => pass.dispose())
+
+  composer.addPass(renderPass)
+  if (enabledPasses.includes(allPasses.n8ao)) {
+    composer.addPass(allPasses.n8ao, 1)
+  }
+
+  if (enabledEffects.length)
+    composer.addPass(new EffectPass(camera, ...enabledEffects))
 }

@@ -25,9 +25,13 @@ import {
 import { BG_ENV } from "../helpers/BG_ENV"
 import { update } from "@tweenjs/tween.js"
 import { HDRI_LIST } from "../hdri/HDRI_LIST"
-import { N8AOPass } from "n8ao"
-import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer"
-import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass"
+import { N8AOPostPass } from "n8ao"
+import {
+  BloomEffect,
+  EffectComposer,
+  EffectPass,
+  RenderPass,
+} from "postprocessing"
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter"
 import { SUBTRACTION, Brush, Evaluator } from "three-bvh-csg"
 
@@ -153,10 +157,11 @@ export default async function CSGPlayground(mainGui) {
   composer = new EffectComposer(renderer)
   // N8AOPass replaces RenderPass
   const renderPass = new RenderPass(scene, camera)
-  const n8aopass = new N8AOPass(scene, camera, 1024, 1024)
+  const n8aopass = new N8AOPostPass(scene, camera)
   n8aopass.configuration.aoRadius = 0.35
   n8aopass.configuration.denoiseRadius = 6.8
-  composer.addPass(n8aopass)
+  composer.addPass(renderPass)
+
   const obj = {
     n8ao: true,
     displayMode: "Combined",
@@ -165,11 +170,9 @@ export default async function CSGPlayground(mainGui) {
 
   aoFol.add(obj, "n8ao").onChange((v) => {
     if (v) {
-      composer.removePass(renderPass)
       composer.addPass(n8aopass)
     } else {
       composer.removePass(n8aopass)
-      composer.addPass(renderPass)
     }
   })
   aoFol.open()
@@ -236,7 +239,7 @@ export default async function CSGPlayground(mainGui) {
 function onWindowResize() {
   camera.aspect = window.innerWidth / window.innerHeight
   camera.updateProjectionMatrix()
-  renderer.setSize(window.innerWidth, window.innerHeight)
+  // renderer.setSize(window.innerWidth, window.innerHeight)
   composer.setSize(window.innerWidth, window.innerHeight)
 }
 
