@@ -496,6 +496,11 @@ function setupEffects() {
   }
 }
 
+/**
+ * Edit effect/pass
+ * @param {Array} array
+ * @param {Effect|Pass} item
+ */
 function updateEffects(array, item) {
   const index = array.indexOf(item)
 
