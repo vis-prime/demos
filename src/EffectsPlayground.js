@@ -25,6 +25,7 @@ import {
   DirectionalLight,
   EquirectangularReflectionMapping,
   CanvasTexture,
+  Color,
 } from "three"
 
 // Model and Env
@@ -41,7 +42,11 @@ import {
   SelectiveBloomEffect,
   VignetteEffect,
   DepthOfFieldEffect,
+  TiltShiftEffect,
+  SMAAEffect,
+  FXAAEffect,
 } from "postprocessing"
+import { MODEL_LIST, MODEL_LOADER } from "./MODEL_LIST"
 
 let stats,
   renderer,
@@ -74,9 +79,12 @@ let bg_env
 const allEffects = {
   bloom: null,
   chromaticAberration: null,
-  selectiveBloom: null,
+
   depthOfField: null,
   vignette: null,
+  tiltShift: null,
+  smaa: null,
+  fxaa: null,
 }
 
 let renderPass
@@ -84,13 +92,25 @@ const allPasses = {
   n8ao: null,
 }
 
-const allParams = {
-  n8ao: {},
+const allGui = {
+  n8ao: () => {},
+  bloom: () => {},
+  chromaticAberration: () => {},
+
+  depthOfField: () => {},
+  vignette: () => {},
+  tiltShift: () => {},
 }
 
 const enabledEffects = []
 const enabledPasses = []
-
+const focusPoint = new Vector3()
+const dummyObj = {
+  toFocus: new Vector3(),
+  fromFocus: new Vector3(),
+  val: 0,
+}
+const focusTween = new Tween(dummyObj).to({ val: 1 }, 1e6)
 export default async function EffectsPlayground(mainGui) {
   gui = mainGui
   sceneGui = gui.addFolder("Scene")
@@ -108,12 +128,7 @@ export default async function EffectsPlayground(mainGui) {
   app.appendChild(renderer.domElement)
 
   // camera
-  camera = new PerspectiveCamera(
-    50,
-    window.innerWidth / window.innerHeight,
-    0.1,
-    150
-  )
+  camera = new PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 150)
   camera.position.set(25, 20, 25)
   // scene
   scene = new Scene()
@@ -162,15 +177,11 @@ export default async function EffectsPlayground(mainGui) {
   })
 
   setupEffects()
+  setupBackground()
 
   // sceneGui.add(transformControls, "mode", ["translate", "rotate", "scale"])
-  bg_env = new BG_ENV(scene, renderer)
-  bg_env.sunEnabled = true
-  bg_env.shadowFloorEnabled = true
-  bg_env.setEnvType("HDRI")
-  bg_env.addGui(sceneGui)
 
-  await setupModels()
+  // await setupModels()
 
   animate()
 
@@ -183,12 +194,7 @@ export default async function EffectsPlayground(mainGui) {
     if (
       lastPointerEvent !== null &&
       timeDiff < 500 &&
-      calculateDistance(
-        lastPointerEvent.clientX,
-        lastPointerEvent.clientY,
-        event.clientX,
-        event.clientY
-      ) < 10
+      calculateDistance(lastPointerEvent.clientX, lastPointerEvent.clientY, event.clientX, event.clientY) < 10
     ) {
       // Double click detected
       console.log("Double click detected!")
@@ -204,6 +210,11 @@ export default async function EffectsPlayground(mainGui) {
 
   const targetElement = app
   targetElement.addEventListener("pointerdown", handlePointerDown)
+  randomDist()
+
+  focusTween.onUpdate(() => {
+    focusPoint.lerp(dummyObj.toFocus, 0.1)
+  })
 }
 
 function onWindowResize() {
@@ -234,11 +245,15 @@ function raycast() {
   raycaster.intersectObject(mainObjects, true, intersects)
 
   if (!intersects.length) {
-    transformControls.detach()
+    // transformControls.detach()
     return
   }
+  focusTween.stop()
+  dummyObj.toFocus.copy(intersects[0].point)
 
-  transformControls.attach(intersects[0].object)
+  focusTween.start()
+  // focusPoint.copy(intersects[0].point)
+  // transformControls.attach(intersects[0].object)
 
   intersects.length = 0
 }
@@ -249,11 +264,63 @@ function onPointerMove(event) {
 }
 
 async function setupModels() {
+  const geo = new BoxGeometry().translate(0, 0.5, 0)
+  for (let index = 0; index < 500; index++) {
+    const mesh = new Mesh(
+      geo,
+      new MeshStandardMaterial({
+        color: 0x111111 * Math.random(),
+        roughness: MathUtils.randFloat(0.1, 0.9),
+        metalness: MathUtils.randFloat(0.1, 0.9),
+      })
+    )
+    mesh.castShadow = mesh.receiveShadow = true
+    mesh.scale.x = MathUtils.randFloat(0.6, 1.5)
+    mesh.scale.y = MathUtils.randFloat(2, 10)
+    mesh.scale.z = MathUtils.randFloat(0.6, 1.5)
+
+    mesh.position.x = MathUtils.randFloatSpread(50)
+    mesh.position.z = MathUtils.randFloatSpread(50)
+
+    mainObjects.add(mesh)
+  }
+}
+
+async function setupBackground() {
+  bg_env = new BG_ENV(scene, renderer)
+  bg_env.sunEnabled = true
+  bg_env.shadowFloorEnabled = true
+  bg_env.setEnvType("HDRI")
+  bg_env.addGui(sceneGui)
   bg_env.preset = HDRI_LIST.round_platform
   bg_env.setBGType("None")
   await bg_env.updateAll()
   bg_env.sunLight.visible = false
   bg_env.shadowFloor.visible = false
+
+  const gltf = await MODEL_LOADER(MODEL_LIST.mourner.url)
+  gltf.scene.scale.setScalar(10)
+  gltf.scene.traverse((node) => {
+    if (node.material) {
+      const orgMat = node.material
+      node.material = new MeshBasicMaterial({
+        color: 0x00ff00,
+        aoMap: orgMat.aoMap,
+        // normalMap: orgMat.normalMap,
+      })
+    }
+  })
+  gltf.scene.scale.setScalar(0.001)
+
+  mainObjects.add(gltf.scene)
+
+  new Tween(gltf.scene.scale).to({ x: 10, y: 10, z: 10 }).easing(Easing.Quadratic.Out).delay(1200).start()
+
+  const floor = new Mesh(new CircleGeometry(40, 64).rotateX(-Math.PI / 2), new MeshBasicMaterial({ color: 0x00ff00 }))
+  floor.receiveShadow = true
+  mainObjects.add(floor)
+
+  addParticles()
 
   // Create a canvas element
   const canvas = document.createElement("canvas")
@@ -298,6 +365,8 @@ async function setupModels() {
   sunLight.shadow.bias = -0.0005
   scene.add(sunLight)
 
+  gui.add(sunLight, "intensity", 0.1, 20)
+
   const twObj = {
     val: 0,
   }
@@ -318,36 +387,6 @@ async function setupModels() {
       sunLight.position.z = z
     })
     .start()
-
-  const geo = new BoxGeometry().translate(0, 0.5, 0)
-  for (let index = 0; index < 500; index++) {
-    const mesh = new Mesh(
-      geo,
-      new MeshStandardMaterial({
-        color: 0x111111 * Math.random(),
-        roughness: MathUtils.randFloat(0.1, 0.9),
-        metalness: MathUtils.randFloat(0.1, 0.9),
-      })
-    )
-    mesh.castShadow = mesh.receiveShadow = true
-    mesh.scale.x = MathUtils.randFloat(0.6, 1.5)
-    mesh.scale.y = MathUtils.randFloat(2, 10)
-    mesh.scale.z = MathUtils.randFloat(0.6, 1.5)
-
-    mesh.position.x = MathUtils.randFloatSpread(50)
-    mesh.position.z = MathUtils.randFloatSpread(50)
-
-    mainObjects.add(mesh)
-  }
-
-  const floor = new Mesh(
-    new CircleGeometry(40, 64).rotateX(-Math.PI / 2),
-    new MeshStandardMaterial()
-  )
-  floor.receiveShadow = true
-  scene.add(floor)
-
-  addParticles()
 }
 
 const bbox = new Box3()
@@ -369,26 +408,14 @@ function fitModelInViewport(model) {
   shiftedCameraPos.copy(camera.position)
   shiftedCameraPos.y = center.y
 
-  endPos.lerpVectors(
-    center,
-    shiftedCameraPos,
-    1 / (center.distanceTo(camera.position) / distance)
-  )
+  endPos.lerpVectors(center, shiftedCameraPos, 1 / (center.distanceTo(camera.position) / distance))
 
   console.log(endPos.distanceTo(center), distance)
   endTar.copy(center)
 
-  new Tween(camera.position)
-    .to(endPos)
-    .duration(1000)
-    .easing(Easing.Quadratic.InOut)
-    .start()
+  new Tween(camera.position).to(endPos).duration(1000).easing(Easing.Quadratic.InOut).start()
 
-  new Tween(controls.target)
-    .to(endTar)
-    .duration(1000)
-    .easing(Easing.Quadratic.InOut)
-    .start()
+  new Tween(controls.target).to(endTar).duration(1000).easing(Easing.Quadratic.InOut).start()
 }
 
 let instancedParticles, particleTween
@@ -396,13 +423,14 @@ let instancedParticles, particleTween
 const addParticles = () => {
   const spread = 50
 
-  const geo = new SphereGeometry(0.01, 8, 8)
+  const geo = new SphereGeometry(0.02, 8, 8)
   const mat = new MeshBasicMaterial()
   mat.color.setRGB(10, 10, 10)
 
   instancedParticles = new InstancedMesh(geo, mat, 1000)
   const matrix = new Matrix4()
   const randomScale = new Vector3()
+  const randColor = new Color()
   console.log(instancedParticles)
   for (let index = 0; index < instancedParticles.count; index++) {
     matrix.identity()
@@ -416,13 +444,17 @@ const addParticles = () => {
     randomScale.setScalar(MathUtils.randFloat(1, 3))
     matrix.scale(randomScale)
 
+    randColor.setHSL(MathUtils.randFloat(0, 1), 1, 0.1)
+    randColor.multiplyScalar(10)
+    instancedParticles.setColorAt(index, randColor)
     instancedParticles.setMatrixAt(index, matrix)
-    particleTween = new Tween(instancedParticles.rotation)
-      .to({
-        y: Math.PI * 4,
-      })
-      .duration(1200000)
   }
+
+  particleTween = new Tween(instancedParticles.rotation)
+    .to({
+      y: Math.PI * 4,
+    })
+    .duration(1200000)
 
   particleTween.start()
   scene.add(instancedParticles)
@@ -432,38 +464,73 @@ function setupEffects() {
   composer = new EffectComposer(renderer)
 
   renderPass = new RenderPass(scene, camera)
+
   composer.addPass(renderPass)
 
   allPasses.n8ao = new N8AOPostPass(scene, camera)
+  composer.addPass(allPasses.n8ao)
+  // const color = new Color()
+  allPasses.n8ao.configuration.color.set(0x342e84).convertLinearToSRGB()
+  allGui.n8ao = (aoFol) => {
+    aoFol.addColor(allPasses.n8ao.configuration, "color")
+    aoFol.add(allPasses.n8ao.configuration, "aoSamples", 1.0, 64.0, 1.0)
+    aoFol.add(allPasses.n8ao.configuration, "denoiseSamples", 1.0, 64.0, 1.0)
+    aoFol.add(allPasses.n8ao.configuration, "denoiseRadius", 0.0, 24.0, 0.01)
+    aoFol.add(allPasses.n8ao.configuration, "aoRadius", 0.01, 10.0, 0.01)
+    aoFol.add(allPasses.n8ao.configuration, "distanceFalloff", 0.0, 10.0, 0.01)
+    aoFol.add(allPasses.n8ao.configuration, "intensity", 0.0, 20.0, 0.01)
+  }
 
-  allEffects.bloom = new BloomEffect()
+  allEffects.bloom = new BloomEffect({
+    mipmapBlur: true,
+    intensity: 15,
+    resolutionScale: 0.5,
+  })
+  allGui.bloom = (folder) => {
+    folder.open()
+    folder.add(allEffects.bloom, "intensity", 1.0, 64.0, 1.0)
+  }
+
   allEffects.chromaticAberration = new ChromaticAberrationEffect({
-    modulationOffset: 1,
-    offset: new Vector2(0.1, 0.1),
+    modulationOffset: 0.5,
+    offset: new Vector2(0.01, 0.01),
     radialModulation: true,
   })
-  allEffects.depthOfField = new DepthOfFieldEffect(camera)
-  allEffects.selectiveBloom = new SelectiveBloomEffect(scene, camera)
-  allEffects.vignette = new VignetteEffect()
+  allGui.chromaticAberration = (folder) => {
+    folder.open()
+    folder.add(allEffects.chromaticAberration, "modulationOffset", 0, 1)
+    folder.add(allEffects.chromaticAberration.offset, "x", 0, 1)
+    folder.add(allEffects.chromaticAberration.offset, "y", 0, 1)
+  }
 
-  // aoFol.open()
-  // aoFol.addColor(n8aopass.configuration, "color")
-  // aoFol.add(n8aopass.configuration, "aoSamples", 1.0, 64.0, 1.0)
-  // aoFol.add(n8aopass.configuration, "denoiseSamples", 1.0, 64.0, 1.0)
-  // aoFol.add(n8aopass.configuration, "denoiseRadius", 0.0, 24.0, 0.01)
-  // aoFol.add(n8aopass.configuration, "aoRadius", 0.01, 10.0, 0.01)
-  // aoFol.add(n8aopass.configuration, "distanceFalloff", 0.0, 10.0, 0.01)
-  // aoFol.add(n8aopass.configuration, "intensity", 0.0, 20.0, 0.01)
+  allEffects.depthOfField = new DepthOfFieldEffect(camera, {
+    resolutionScale: 0.5,
+    bokehScale: 15,
+    worldFocusRange: 30,
+  })
 
-  // aoFol
-  //   .add(obj, "displayMode", ["Combined", "AO", "No AO", "Split", "Split AO"])
-  //   .onChange((v) => {
-  //     n8aopass.setDisplayMode(v)
-  //   })
+  allEffects.depthOfField.target = focusPoint
+  allGui.depthOfField = (folder) => {
+    folder.open()
+    folder.add(allEffects.depthOfField, "bokehScale", 1, 20)
+    folder.add(allEffects.depthOfField.cocMaterial, "worldFocusRange", 5, 30)
+
+    folder.add(focusPoint, "x", -5, 5)
+    folder.add(focusPoint, "y", -5, 5)
+    folder.add(focusPoint, "z", -5, 5)
+  }
+
+  allEffects.vignette = new VignetteEffect({ eskil: true })
+  allEffects.tiltShift = new TiltShiftEffect()
+
+  // allEffects.smaa = new SMAAEffect()
+  // allEffects.fxaa = new FXAAEffect()
+
   const effectsFol = gui.addFolder("POST PROCESSING")
+  effectsFol.open()
   const createToggle = (gui, folder, enabledItems, name, effect) => {
     const guiToggle = {
-      enabled: false,
+      enabled: composer.passes.includes(effect),
       editFolder: null,
     }
 
@@ -478,21 +545,22 @@ function setupEffects() {
       .add(guiToggle, "enabled")
       .name(name)
       .onChange((v) => {
-        updateEffects(enabledItems, effect)
+        updateEffects(enabledItems, effect, v)
         if (v) {
           guiToggle.editFolder = folder.addFolder(name)
+          if (allGui[name]) allGui[name](guiToggle.editFolder)
         } else {
           destroy()
         }
       })
   }
 
-  for (const [name, effect] of Object.entries(allPasses)) {
-    createToggle(effectsFol, effectsFol, enabledPasses, name, effect)
+  for (const [name, pass] of Object.entries(allPasses)) {
+    if (pass) createToggle(effectsFol, effectsFol, enabledPasses, name, pass)
   }
 
   for (const [name, effect] of Object.entries(allEffects)) {
-    createToggle(effectsFol, effectsFol, enabledEffects, name, effect)
+    if (effect) createToggle(effectsFol, effectsFol, enabledEffects, name, effect)
   }
 }
 
@@ -501,19 +569,18 @@ function setupEffects() {
  * @param {Array} array
  * @param {Effect|Pass} item
  */
-function updateEffects(array, item) {
-  const index = array.indexOf(item)
-
-  if (index === -1) {
+function updateEffects(array, item, add = true) {
+  if (add) {
     // Item doesn't exist in the array, so add it
     array.push(item)
-    console.log(array)
   } else {
+    const index = array.indexOf(item)
     // Item exists in the array, so remove it
-    array.splice(index, 1)
-    console.log(array)
+    if (index !== -1) {
+      array.splice(index, 1)
+    }
   }
-
+  console.log(array)
   const oldPasses = [...composer.passes]
   composer.removeAllPasses()
 
@@ -524,6 +591,88 @@ function updateEffects(array, item) {
     composer.addPass(allPasses.n8ao, 1)
   }
 
-  if (enabledEffects.length)
-    composer.addPass(new EffectPass(camera, ...enabledEffects))
+  if (enabledEffects.length) composer.addPass(new EffectPass(camera, ...enabledEffects))
+}
+
+function randomDist() {
+  // Constants
+  const radius = 40 // Radius of the circular area
+  const numBoxes = 1000 // Number of boxes
+  const boxSize = 1 // Size of each box
+  const fixedY = 0 // Fixed Y position for all boxes
+
+  // Create box geometry
+  const boxGeometry = new BoxGeometry(boxSize, boxSize, boxSize).translate(0, 0.5, 0)
+
+  // Create instance matrix attribute
+  const instanceMatrix = new Matrix4()
+
+  // Create instanced mesh
+  const instancedMesh = new InstancedMesh(boxGeometry, new MeshBasicMaterial({ color: 0x00ff00 }), numBoxes)
+
+  mainObjects.add(instancedMesh)
+  instancedMesh.scale.setScalar(0.001)
+
+  new Tween(instancedMesh.scale).to({ x: 1, y: 1, z: 1 }).easing(Easing.Quadratic.Out).delay(2000).start()
+
+  // Array to store box positions
+  const boxPositions = []
+
+  // Function to check if a new box position intersects with existing boxes
+  function intersectsExistingBoxes(position) {
+    for (let i = 0; i < boxPositions.length; i++) {
+      const existingPosition = boxPositions[i]
+      const dx = existingPosition.x - position.x
+      const dz = existingPosition.z - position.z
+      const distanceSquared = dx * dx + dz * dz
+
+      if (distanceSquared < boxSize * boxSize) {
+        return true
+      }
+    }
+    return false
+  }
+
+  // Function to generate a random position within the circular area
+  function generateRandomPosition() {
+    const angle = Math.random() * Math.PI * 2
+    let x = Math.cos(angle) * (Math.random() * radius)
+    let z = Math.sin(angle) * (Math.random() * radius)
+
+    if (Math.abs(x) < 5 && Math.abs(z) < 5) {
+      x += Math.random() > 0.5 ? MathUtils.randFloat(4, 5) : MathUtils.randFloat(-4, -5)
+      z += Math.random() > 0.5 ? MathUtils.randFloat(4, 5) : MathUtils.randFloat(-4, -5)
+    }
+    return new Vector3(x, fixedY, z)
+  }
+
+  // Create and position boxes randomly
+  for (let i = 0; i < numBoxes; i++) {
+    let position
+    let attempts = 0
+    do {
+      position = generateRandomPosition()
+
+      attempts++
+      if (attempts > 1000) {
+        console.log(
+          "Failed to find a suitable position for a box. Consider increasing the circular area or reducing the number of boxes."
+        )
+        break
+      }
+    } while (intersectsExistingBoxes(position))
+
+    if (attempts <= 1000) {
+      instanceMatrix.identity()
+      instanceMatrix.makeRotationY(MathUtils.randFloat(-Math.PI * 0.05, Math.PI * 0.05))
+      instanceMatrix.setPosition(position)
+      instanceMatrix.scale(new Vector3(1, MathUtils.randFloat(1, 5), 1))
+
+      instancedMesh.setMatrixAt(i, instanceMatrix)
+
+      boxPositions.push(position)
+    }
+  }
+
+  instancedMesh.instanceMatrix.needsUpdate = true // Update instance matrix
 }
