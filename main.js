@@ -6,6 +6,7 @@ import ThicknessDemo from "./src/ThicknessDemo"
 import MaterialSwapDemo from "./src/MaterialSwapDemo"
 import EffectsPlayground from "./src/EffectsPlayground"
 import CSGPlayground from "./src/CSGPlayground"
+import VehicleShowcase from "./src/VehicleShowcase"
 
 const gui = new GUI({ title: "Demos: v" + version, closeFolders: true })
 if (window.innerWidth < window.innerHeight) {
@@ -26,16 +27,23 @@ const Demos = {
   MaterialSwap: MaterialSwapDemo,
   EffectsPlayground: EffectsPlayground,
   CSGPlayground: CSGPlayground,
+  VehicleShowcase: VehicleShowcase,
 }
 
 gui.add(params, "homeButton").name("🔙Home")
 
+const demoContainer = document.createElement("div")
+demoContainer.classList.add("demo-container")
+document.body.appendChild(demoContainer)
+
 const HomeDemo = () => {
   gui.destroy()
-  for (const [name, func] of Object.entries(Demos)) {
+  for (const name of Object.keys(Demos)) {
+    if (name === "Home") continue
     const button = document.createElement("button")
     button.innerHTML = name
-    document.body.appendChild(button)
+    demoContainer.appendChild(button)
+    button.classList.add("demo-button")
     button.onclick = () => {
       router.redirectTo(name)
       location.reload()

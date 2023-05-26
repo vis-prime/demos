@@ -42,6 +42,10 @@ export const MODEL_LIST = {
     name: "Material display platform",
     url: "./models/mats_platform_2k_comp.glb",
   },
+  mercedes_project_one: {
+    name: "Project One",
+    url: "./models/mercedes_project_one_2k_comp.glb",
+  },
 }
 
 /**
