@@ -469,6 +469,7 @@ function setupEffects() {
 
   allPasses.n8ao = new N8AOPostPass(scene, camera)
   composer.addPass(allPasses.n8ao)
+  enabledPasses.push(allPasses.n8ao)
   // const color = new Color()
   allPasses.n8ao.configuration.color.set(0x342e84).convertLinearToSRGB()
   allGui.n8ao = (aoFol) => {
