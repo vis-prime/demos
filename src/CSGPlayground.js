@@ -7,7 +7,7 @@ import {
   ACESFilmicToneMapping,
   PerspectiveCamera,
   Scene,
-  sRGBEncoding,
+  SRGBColorSpace,
   WebGLRenderer,
   Vector2,
   Raycaster,
@@ -26,12 +26,7 @@ import { BG_ENV } from "../helpers/BG_ENV"
 import { update } from "@tweenjs/tween.js"
 import { HDRI_LIST } from "../hdri/HDRI_LIST"
 import { N8AOPostPass } from "n8ao"
-import {
-  BloomEffect,
-  EffectComposer,
-  EffectPass,
-  RenderPass,
-} from "postprocessing"
+import { BloomEffect, EffectComposer, EffectPass, RenderPass } from "postprocessing"
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter"
 import { SUBTRACTION, Brush, Evaluator } from "three-bvh-csg"
 
@@ -95,18 +90,13 @@ export default async function CSGPlayground(mainGui) {
   renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = VSMShadowMap
-  renderer.outputEncoding = sRGBEncoding
+  renderer.outputColorSpace = SRGBColorSpace
   renderer.toneMapping = ACESFilmicToneMapping
 
   app.appendChild(renderer.domElement)
 
   // camera
-  camera = new PerspectiveCamera(
-    50,
-    window.innerWidth / window.innerHeight,
-    0.1,
-    150
-  )
+  camera = new PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 150)
   camera.position.set(5, 2, 5)
   // scene
   scene = new Scene()
@@ -183,11 +173,9 @@ export default async function CSGPlayground(mainGui) {
   aoFol.add(n8aopass.configuration, "distanceFalloff", 0.0, 10.0, 0.01)
   aoFol.add(n8aopass.configuration, "intensity", 0.0, 20.0, 0.01)
 
-  aoFol
-    .add(obj, "displayMode", ["Combined", "AO", "No AO", "Split", "Split AO"])
-    .onChange((v) => {
-      n8aopass.setDisplayMode(v)
-    })
+  aoFol.add(obj, "displayMode", ["Combined", "AO", "No AO", "Split", "Split AO"]).onChange((v) => {
+    n8aopass.setDisplayMode(v)
+  })
 
   // sceneGui.add(transformControls, "mode", ["translate", "rotate", "scale"])
   bg_env = new BG_ENV(scene, renderer)
@@ -211,12 +199,7 @@ export default async function CSGPlayground(mainGui) {
     if (
       lastPointerEvent !== null &&
       timeDiff < 500 &&
-      calculateDistance(
-        lastPointerEvent.clientX,
-        lastPointerEvent.clientY,
-        event.clientX,
-        event.clientY
-      ) < 10
+      calculateDistance(lastPointerEvent.clientX, lastPointerEvent.clientY, event.clientX, event.clientY) < 10
     ) {
       // Double click detected
       console.log("Double click detected!")

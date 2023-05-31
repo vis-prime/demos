@@ -5,7 +5,7 @@ import {
   ACESFilmicToneMapping,
   PerspectiveCamera,
   Scene,
-  sRGBEncoding,
+  SRGBColorSpace,
   WebGLRenderer,
   Vector2,
   Raycaster,
@@ -27,8 +27,7 @@ import { BG_ENV } from "../helpers/BG_ENV"
 import { Easing, Tween, update } from "@tweenjs/tween.js"
 import { HDRI_LIST } from "../hdri/HDRI_LIST"
 import { CurveHandler } from "../helpers/CurveHandler"
-const blender_docs =
-  "https://docs.blender.org/manual/en/3.5/addons/import_export/scene_gltf2.html"
+const blender_docs = "https://docs.blender.org/manual/en/3.5/addons/import_export/scene_gltf2.html"
 let stats,
   renderer,
   raf,
@@ -61,19 +60,14 @@ export default async function ThicknessDemo(mainGui) {
   renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = VSMShadowMap
-  renderer.outputEncoding = sRGBEncoding
+  renderer.outputColorSpace = SRGBColorSpace
   renderer.toneMapping = ACESFilmicToneMapping
   renderer.toneMappingExposure = 0
 
   app.appendChild(renderer.domElement)
 
   // camera
-  camera = new PerspectiveCamera(
-    50,
-    window.innerWidth / window.innerHeight,
-    0.1,
-    150
-  )
+  camera = new PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 150)
   camera.position.set(3, 2, 3)
   // scene
   scene = new Scene()
@@ -141,12 +135,7 @@ export default async function ThicknessDemo(mainGui) {
     if (
       lastPointerEvent !== null &&
       timeDiff < 500 &&
-      calculateDistance(
-        lastPointerEvent.clientX,
-        lastPointerEvent.clientY,
-        event.clientX,
-        event.clientY
-      ) < 10
+      calculateDistance(lastPointerEvent.clientX, lastPointerEvent.clientY, event.clientX, event.clientY) < 10
     ) {
       // Double click detected
       console.log("Double click detected!")
@@ -401,8 +390,7 @@ async function setupModels() {
         return
       }
 
-      exposureExitTween._valuesStart.toneMappingExposure =
-        renderer.toneMappingExposure
+      exposureExitTween._valuesStart.toneMappingExposure = renderer.toneMappingExposure
       exposureExitTween.onComplete(resolve)
       exposureExitTween.start()
     })
@@ -431,67 +419,45 @@ function fitModelInViewport(model) {
   shiftedCameraPos.copy(camera.position)
   shiftedCameraPos.y = center.y
 
-  endPos.lerpVectors(
-    center,
-    shiftedCameraPos,
-    1 / (center.distanceTo(camera.position) / distance)
-  )
+  endPos.lerpVectors(center, shiftedCameraPos, 1 / (center.distanceTo(camera.position) / distance))
 
   console.log(endPos.distanceTo(center), distance)
   endTar.copy(center)
 
-  new Tween(camera.position)
-    .to(endPos)
-    .duration(1000)
-    .easing(Easing.Quadratic.InOut)
-    .start()
+  new Tween(camera.position).to(endPos).duration(1000).easing(Easing.Quadratic.InOut).start()
 
-  new Tween(controls.target)
-    .to(endTar)
-    .duration(1000)
-    .easing(Easing.Quadratic.InOut)
-    .start()
+  new Tween(controls.target).to(endTar).duration(1000).easing(Easing.Quadratic.InOut).start()
 }
 
 const IntroCurves = {
   [MODEL_LIST.aztec.name]: [
     {
       position: [3.3071321443089925, 1.388944390019785, 3.307132144799106],
-      target: [
-        -1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8,
-      ],
+      target: [-1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8],
       fov: 50,
       focus: [0, 0, 0],
     },
     {
       position: [-1.7303892445874622, 1.3344887086602903, 2.200999081476231],
-      target: [
-        -1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8,
-      ],
+      target: [-1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8],
       fov: 90,
       focus: [0, 0, 0],
     },
     {
       position: [-1.6896684397735617, 3.5239462707277447, -2.79920023168043],
-      target: [
-        -1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8,
-      ],
+      target: [-1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8],
       fov: 40,
       focus: [0, 0, 0],
     },
     {
       position: [2.4755038102622025, 1.761564273787293, -2.545411150778058],
-      target: [
-        -1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8,
-      ],
+      target: [-1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8],
       fov: 20,
       focus: [0, 0, 0],
     },
     {
       position: [0.5324308158242546, 1.3889240952517157, 4.527657651483493],
-      target: [
-        -1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8,
-      ],
+      target: [-1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8],
       fov: 50,
       focus: [0, 0, 0],
     },
@@ -588,11 +554,7 @@ const IntroExtras = {
       for (let index = 0; index < instancedParticles.count; index++) {
         matrix.identity()
 
-        matrix.setPosition(
-          MathUtils.randFloatSpread(10),
-          MathUtils.randFloat(0, 10),
-          MathUtils.randFloatSpread(10)
-        )
+        matrix.setPosition(MathUtils.randFloatSpread(10), MathUtils.randFloat(0, 10), MathUtils.randFloatSpread(10))
 
         randomScale.setScalar(MathUtils.randFloat(0.6, 1.5))
         matrix.scale(randomScale)

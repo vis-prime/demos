@@ -6,7 +6,7 @@ import {
   PerspectiveCamera,
   Raycaster,
   Scene,
-  sRGBEncoding,
+  SRGBColorSpace,
   Vector2,
   WebGLRenderer,
 } from "three"
@@ -103,7 +103,7 @@ export class ThreeAssets {
     this.renderer.setPixelRatio(this.params.pixelRatio)
     this.renderer.toneMapping = ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 1
-    this.renderer.outputEncoding = sRGBEncoding
+    this.renderer.outputColorSpace = SRGBColorSpace
     this.renderer.shadowMap.enabled = true
     // this.renderer.shadowMap.type = VSMShadowMap
 

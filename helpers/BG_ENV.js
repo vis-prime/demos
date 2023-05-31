@@ -11,7 +11,7 @@ import {
   FloatType,
   HalfFloatType,
   TextureLoader,
-  sRGBEncoding,
+  SRGBColorSpace,
   LinearFilter,
   DirectionalLightHelper,
   MeshStandardMaterial,
@@ -201,10 +201,7 @@ export class BG_ENV {
       this.init()
       // console.log(this)
 
-      await Promise.all([
-        this.downloadEnvironment(data),
-        this.downloadBackground(data),
-      ])
+      await Promise.all([this.downloadEnvironment(data), this.downloadBackground(data)])
 
       this.scene.environment = this.envTexture
 
@@ -215,10 +212,7 @@ export class BG_ENV {
         }
       }
 
-      if (
-        this.backgroundType === BG_OPTIONS.GroundProjection &&
-        this.bgTexture
-      ) {
+      if (this.backgroundType === BG_OPTIONS.GroundProjection && this.bgTexture) {
         this.scene.background = null
 
         if (!this.groundProjectedSkybox) {
@@ -313,9 +307,7 @@ export class BG_ENV {
 
     let texture = this.envCache[key]
     if (!texture) {
-      texture = exr
-        ? await exrLoader.loadAsync(key)
-        : await rgbeLoader.loadAsync(key)
+      texture = exr ? await exrLoader.loadAsync(key) : await rgbeLoader.loadAsync(key)
       this.envCache[key] = texture
       texture.mapping = EquirectangularReflectionMapping
       this.renderer.initTexture(texture)
@@ -326,12 +318,7 @@ export class BG_ENV {
 
   async downloadBackground({ webP, avif } = {}) {
     const key = webP || avif
-    if (
-      !(
-        this.backgroundType === BG_OPTIONS.Default ||
-        this.backgroundType === BG_OPTIONS.GroundProjection
-      )
-    ) {
+    if (!(this.backgroundType === BG_OPTIONS.Default || this.backgroundType === BG_OPTIONS.GroundProjection)) {
       this.bgTexture = null
       return
     }
@@ -342,7 +329,7 @@ export class BG_ENV {
         texture = await textureLoader.loadAsync(key)
         this.bgCache[key] = texture
         texture.mapping = EquirectangularReflectionMapping
-        texture.encoding = sRGBEncoding
+        texture.colorSpace = SRGBColorSpace
         texture.minFilter = LinearFilter
         this.renderer.initTexture(texture)
       }
@@ -389,11 +376,9 @@ export class BG_ENV {
     }
 
     if (envDict.webP || envDict.avif) {
-      const texture = await textureLoader.loadAsync(
-        envDict.webP || envDict.avif
-      )
+      const texture = await textureLoader.loadAsync(envDict.webP || envDict.avif)
       texture.mapping = EquirectangularReflectionMapping
-      texture.encoding = sRGBEncoding
+      texture.colorSpace = SRGBColorSpace
       scene.background = texture
       console.log("bg loaded")
 

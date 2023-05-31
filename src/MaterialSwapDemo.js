@@ -5,7 +5,6 @@ import {
   ACESFilmicToneMapping,
   PerspectiveCamera,
   Scene,
-  sRGBEncoding,
   WebGLRenderer,
   Vector2,
   Raycaster,
@@ -40,10 +39,7 @@ import { MATERIAL_LIST } from "./MATERIAL_LIST"
 import { MeshBasicMaterial } from "three"
 import { Text } from "troika-three-text"
 import { MODEL_LIST, MODEL_LOADER } from "./MODEL_LIST"
-import {
-  channelParams,
-  showcaseMeshes,
-} from "./constants/MaterialSwapConstants"
+import { channelParams, showcaseMeshes } from "./constants/MaterialSwapConstants"
 
 let stats,
   /**
@@ -94,22 +90,15 @@ export default async function MaterialSwapDemo(mainGui) {
   renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = VSMShadowMap
-  renderer.outputEncoding = sRGBEncoding
+  renderer.outputColorSpace = SRGBColorSpace
   renderer.toneMapping = ACESFilmicToneMapping
 
-  ktxTextureLoader = new KTX2Loader()
-    .setTranscoderPath("./basis/")
-    .detectSupport(renderer)
+  ktxTextureLoader = new KTX2Loader().setTranscoderPath("./basis/").detectSupport(renderer)
 
   app.appendChild(renderer.domElement)
 
   // camera
-  camera = new PerspectiveCamera(
-    50,
-    window.innerWidth / window.innerHeight,
-    0.1,
-    150
-  )
+  camera = new PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 150)
   camera.position.set(5, 2, 5)
   // scene
   scene = new Scene()
@@ -163,12 +152,7 @@ export default async function MaterialSwapDemo(mainGui) {
     if (
       lastPointerEvent !== null &&
       timeDiff < 500 &&
-      calculateDistance(
-        lastPointerEvent.clientX,
-        lastPointerEvent.clientY,
-        event.clientX,
-        event.clientY
-      ) < 10
+      calculateDistance(lastPointerEvent.clientX, lastPointerEvent.clientY, event.clientX, event.clientY) < 10
     ) {
       // Double click detected
       console.log("Double click detected!")
@@ -286,10 +270,7 @@ async function setupStage() {
   const planeGeometry = new PlaneGeometry()
   for (const [name, item] of Object.entries(channelParams)) {
     item.group = new Group()
-    item.mesh = new Mesh(
-      planeGeometry,
-      new MeshBasicMaterial({ color: 0x000000 })
-    )
+    item.mesh = new Mesh(planeGeometry, new MeshBasicMaterial({ color: 0x000000 }))
     item.mesh.name = name
     item.mesh.vis_channel = name
     item.text = new Text()
@@ -311,9 +292,7 @@ async function setupStage() {
     const X = paddedWidth * index - (paddedWidth * count) / 2 + padding
     item.group.position.set(X, 1.5, 0)
 
-    item.tween = new Tween(item)
-      .to({ lerpValue: 1 })
-      .easing(Easing.Quadratic.InOut)
+    item.tween = new Tween(item).to({ lerpValue: 1 }).easing(Easing.Quadratic.InOut)
 
     channelMeshesGroup.add(item.group)
     index++
@@ -323,36 +302,16 @@ async function setupStage() {
 
   // Meshes for material display
 
-  showcaseMeshes.box.mesh = new Mesh(
-    new BoxGeometry(width, width, width, 10, 10, 10),
-    displayMaterial
-  )
-  showcaseMeshes.sphere.mesh = new Mesh(
-    new SphereGeometry(width / 2),
-    displayMaterial
-  )
-  showcaseMeshes.cylinder.mesh = new Mesh(
-    new CylinderGeometry(width / 2, width / 2, width),
-    displayMaterial
-  )
-  showcaseMeshes.torus.mesh = new Mesh(
-    new TorusGeometry(width / 3, width / 8),
-    displayMaterial
-  )
-  showcaseMeshes.torusKnot.mesh = new Mesh(
-    new TorusKnotGeometry(width / 4, width / 8),
-    displayMaterial
-  )
+  showcaseMeshes.box.mesh = new Mesh(new BoxGeometry(width, width, width, 10, 10, 10), displayMaterial)
+  showcaseMeshes.sphere.mesh = new Mesh(new SphereGeometry(width / 2), displayMaterial)
+  showcaseMeshes.cylinder.mesh = new Mesh(new CylinderGeometry(width / 2, width / 2, width), displayMaterial)
+  showcaseMeshes.torus.mesh = new Mesh(new TorusGeometry(width / 3, width / 8), displayMaterial)
+  showcaseMeshes.torusKnot.mesh = new Mesh(new TorusKnotGeometry(width / 4, width / 8), displayMaterial)
   showcaseMeshes.plane.mesh = new Mesh(
-    new PlaneGeometry(width, width, 10, 10)
-      .rotateX(-Math.PI / 2)
-      .translate(0, -width / 2, 0),
+    new PlaneGeometry(width, width, 10, 10).rotateX(-Math.PI / 2).translate(0, -width / 2, 0),
     displayMaterial
   )
-  showcaseMeshes.octahedron.mesh = new Mesh(
-    new OctahedronGeometry(width / 2),
-    displayMaterial
-  )
+  showcaseMeshes.octahedron.mesh = new Mesh(new OctahedronGeometry(width / 2), displayMaterial)
 
   const dat = Object.values(showcaseMeshes)
 
@@ -449,20 +408,16 @@ function addMaterialGui() {
   matGui.add(mat, "displacementBias", 0, 1)
   matGui.add(mat, "displacementScale", 0, 1)
 
-  matGui
-    .add(mat.vis_materialPreset, "pbrPreset", MATERIAL_LIST)
-    .onChange(() => {
-      applyMaterial()
-    })
+  matGui.add(mat.vis_materialPreset, "pbrPreset", MATERIAL_LIST).onChange(() => {
+    applyMaterial()
+  })
   matGui.add(mat.vis_materialPreset, "format", ["webP", "ktx"]).onChange(() => {
     applyMaterial()
   })
 
-  matGui
-    .add(mat.vis_materialPreset, "masterRepeat", 0.1, 5, 0.1)
-    .onChange(() => {
-      updateMasterRepeat(mat)
-    })
+  matGui.add(mat.vis_materialPreset, "masterRepeat", 0.1, 5, 0.1).onChange(() => {
+    updateMasterRepeat(mat)
+  })
 
   const test = {
     togOn: async () => {
@@ -518,25 +473,13 @@ function fitModelInViewport(model) {
   shiftedCameraPos.copy(camera.position)
   shiftedCameraPos.y = center.y
 
-  endPos.lerpVectors(
-    center,
-    shiftedCameraPos,
-    1 / (center.distanceTo(camera.position) / distance)
-  )
+  endPos.lerpVectors(center, shiftedCameraPos, 1 / (center.distanceTo(camera.position) / distance))
 
   endTar.copy(center)
 
-  new Tween(camera.position)
-    .to(endPos)
-    .duration(1000)
-    .easing(Easing.Quadratic.InOut)
-    .start()
+  new Tween(camera.position).to(endPos).duration(1000).easing(Easing.Quadratic.InOut).start()
 
-  new Tween(controls.target)
-    .to(endTar)
-    .duration(1000)
-    .easing(Easing.Quadratic.InOut)
-    .start()
+  new Tween(controls.target).to(endTar).duration(1000).easing(Easing.Quadratic.InOut).start()
 }
 
 const textureLoader = new TextureLoader()
@@ -563,10 +506,7 @@ const applyMaterial = async (preset) => {
 
   if (!pbrPreset) return
 
-  const texturesDict =
-    presetData.format === "webP"
-      ? presetData.pbrPreset.textures_org
-      : presetData.pbrPreset.textures
+  const texturesDict = presetData.format === "webP" ? presetData.pbrPreset.textures_org : presetData.pbrPreset.textures
 
   const loader = presetData.format === "webP" ? textureLoader : ktxTextureLoader
 
@@ -586,7 +526,7 @@ const applyMaterial = async (preset) => {
 
             texture.name = presetData.pbrPreset.name + "_" + key
             if (key === "diffuse") {
-              texture.encoding = sRGBEncoding
+              texture.colorSpace = SRGBColorSpace
               // texture.colorSpace = SRGBColorSpace
             }
 
@@ -675,9 +615,7 @@ async function toggleTextureMeshes(state, textureDict = {}, test) {
       // console.log(state, item.lerpValue.toFixed(2))
       text.position.lerpVectors(textStartPos, textEndPos, item.lerpValue)
       mat.color.lerpColors(meshStartColor, meshEndColor, item.lerpValue)
-      text.color = colorAny
-        .lerpColors(textStartColor, textEndColor, item.lerpValue)
-        .getHex()
+      text.color = colorAny.lerpColors(textStartColor, textEndColor, item.lerpValue).getHex()
     })
 
     tween.delay(delayInc)

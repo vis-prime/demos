@@ -5,7 +5,6 @@ import {
   ACESFilmicToneMapping,
   PerspectiveCamera,
   Scene,
-  sRGBEncoding,
   WebGLRenderer,
   Vector2,
   Raycaster,
