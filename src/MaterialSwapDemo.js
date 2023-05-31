@@ -248,7 +248,7 @@ class MaterialPreset {
 
 /**
  * Material used for display.
- * @type {THREE.MeshPhysicalMaterial & { vis_materialPreset: MaterialPreset }}
+ * @type {MeshPhysicalMaterial & { vis_materialPreset: MaterialPreset }}
  */
 const displayMaterial = new MeshPhysicalMaterial()
 displayMaterial.vis_materialPreset = new MaterialPreset()
@@ -439,7 +439,7 @@ function addMaterialGui() {
 
 /**
  * Update repeat
- * @param {THREE.MeshPhysicalMaterial & { vis_materialPreset: MaterialPreset }}
+ * @param {MeshPhysicalMaterial & { vis_materialPreset: MaterialPreset }}
  */
 function updateMasterRepeat(material) {
   for (const tex of Object.values(material)) {
@@ -495,7 +495,7 @@ const applyMaterial = async (preset) => {
   const mat = displayMaterial
 
   /**
-   * @type { {THREE.MeshPhysicalMaterial & { vis_materialPreset: MaterialPreset }} }
+   * @type { {MeshPhysicalMaterial & { vis_materialPreset: MaterialPreset }} }
    */
   const presetData = mat.vis_materialPreset
 
