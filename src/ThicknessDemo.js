@@ -19,6 +19,8 @@ import {
   Mesh,
   InstancedMesh,
   Matrix4,
+  TextureLoader,
+  RepeatWrapping,
 } from "three"
 
 // Model and Env
@@ -48,6 +50,11 @@ let sceneGui
  * @type {BG_ENV}
  */
 let bg_env
+
+/**
+ * @type {CurveHandler}
+ */
+let curveHandler
 
 export default async function ThicknessDemo(mainGui) {
   gui = mainGui
@@ -81,7 +88,7 @@ export default async function ThicknessDemo(mainGui) {
   controls.enableDamping = true // an animation loop is required when either damping or auto-rotation are enabled
   controls.dampingFactor = 0.05
   controls.minDistance = 0.1
-  controls.maxDistance = 100
+  controls.maxDistance = 50
   controls.maxPolarAngle = Math.PI / 1.5
   controls.target.set(0, 1, 0)
 
@@ -122,6 +129,8 @@ export default async function ThicknessDemo(mainGui) {
   bg_env.setEnvType("HDRI")
   bg_env.addGui(sceneGui)
 
+  curveHandler = new CurveHandler(scene, camera, controls, renderer)
+  // curveHandler.addGui(gui)
   await setupModels()
 
   animate()
@@ -199,8 +208,6 @@ function onPointerMove(event) {
 }
 
 async function setupModels() {
-  const curveHandler = new CurveHandler(scene, camera, controls, renderer)
-  // curveHandler.addGui(gui)
   const ModelData = {
     Aztec: {
       name: MODEL_LIST.aztec.name,
@@ -259,9 +266,13 @@ async function setupModels() {
       bgEnvPromise = bg_env.updateAll()
     }
 
-    await Promise.all([modelPromise, bgEnvPromise])
+    const texloader = new TextureLoader()
+    const anisoTexPromise = texloader.loadAsync("./textures/anisoN.webp")
+
+    const [anisoTexture] = await Promise.all([anisoTexPromise, modelPromise, bgEnvPromise])
+    anisoTexture.wrapS = anisoTexture.wrapT = RepeatWrapping
     model = data.model
-    console.log({ modelPromise, bgEnvPromise })
+
     mainObjects.add(model)
 
     await renderer.compile(scene, camera)
@@ -328,6 +339,7 @@ async function setupModels() {
       }
 
       console.log({ texParams, texDict })
+      console.log("mat", mat)
 
       mFol.addColor(mat, "color")
 
@@ -369,6 +381,24 @@ async function setupModels() {
         iFol.add(mat, "iridescenceIOR", 0, 1)
         // iFol.add(mat.iridescenceThicknessRange, "0")
         iFol.add(mat.iridescenceThicknessRange, "1", 0, 1000).name("Range[1]")
+
+        const aFol = mFol.addFolder("Anisotropy stuff")
+        aFol.add(mat, "anisotropy", 0, 1)
+        aFol.add(mat, "anisotropyRotation", 0, 2 * Math.PI)
+        if (!mat.anisotropyMap) {
+          mat.anisotropyMap = anisoTexture
+          mat.needsUpdate = true
+          texDict.anisotropyMap = mat.anisotropyMap
+          texParams.anisotropyMap = true
+        }
+        aFol
+          .add(anisoTexture.repeat, "x", 1, 100)
+          .name("texture repeat")
+          .onChange((v) => {
+            anisoTexture.repeat.setScalar(v)
+          })
+        console.log("ANISO", mat.anisotropyMap)
+        makeTextureToggleButton(aFol, "anisotropyMap")
       }
     }
   }
@@ -408,6 +438,8 @@ const endTar = new Vector3()
 const shiftedCameraPos = new Vector3()
 
 function fitModelInViewport(model) {
+  curveHandler.playBackTween.stop()
+
   bbox.setFromObject(model, true)
   bbox.getCenter(center)
   bbox.getSize(size)
@@ -421,8 +453,11 @@ function fitModelInViewport(model) {
 
   endPos.lerpVectors(center, shiftedCameraPos, 1 / (center.distanceTo(camera.position) / distance))
 
-  console.log(endPos.distanceTo(center), distance)
   endTar.copy(center)
+
+  if (camera.position.distanceTo(endPos) < 0.1) {
+    return
+  }
 
   new Tween(camera.position).to(endPos).duration(1000).easing(Easing.Quadratic.InOut).start()
 
