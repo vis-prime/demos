@@ -7,6 +7,7 @@ import MaterialSwapDemo from "./src/MaterialSwapDemo"
 import EffectsPlayground from "./src/EffectsPlayground"
 import CSGPlayground from "./src/CSGPlayground"
 import VehicleShowcase from "./src/VehicleShowcase"
+import AnisotropyAngel from "./src/AnisotropyAngel"
 
 const gui = new GUI({ title: "Demos: v" + version, closeFolders: true })
 if (window.innerWidth < window.innerHeight) {
@@ -28,6 +29,7 @@ const Demos = {
   EffectsPlayground: EffectsPlayground,
   CSGPlayground: CSGPlayground,
   VehicleShowcase: VehicleShowcase,
+  AnisotropyAngel: AnisotropyAngel,
 }
 
 gui.add(params, "homeButton").name("🔙Home")

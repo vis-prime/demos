@@ -128,7 +128,7 @@ export default async function ThicknessDemo(mainGui) {
   bg_env.shadowFloorEnabled = true
   bg_env.setEnvType("HDRI")
   bg_env.addGui(sceneGui)
-
+  sceneGui.add(camera, "fov", 1, 179).onChange(() => camera.updateProjectionMatrix())
   curveHandler = new CurveHandler(scene, camera, controls, renderer)
   // curveHandler.addGui(gui)
   await setupModels()
@@ -233,6 +233,12 @@ async function setupModels() {
       model: null,
       hdri: HDRI_LIST.round_platform,
     },
+    Pots: {
+      name: MODEL_LIST.pots.name,
+      url: MODEL_LIST.pots.url,
+      model: null,
+      hdri: HDRI_LIST.round_platform,
+    },
   }
 
   const params = {
@@ -267,7 +273,7 @@ async function setupModels() {
     }
 
     const texloader = new TextureLoader()
-    const anisoTexPromise = texloader.loadAsync("./textures/anisoN.webp")
+    const anisoTexPromise = texloader.loadAsync("./textures/aniso.png")
 
     const [anisoTexture] = await Promise.all([anisoTexPromise, modelPromise, bgEnvPromise])
     anisoTexture.wrapS = anisoTexture.wrapT = RepeatWrapping
@@ -378,7 +384,7 @@ async function setupModels() {
 
         const iFol = mFol.addFolder("Iridescence stuff")
         iFol.add(mat, "iridescence", 0, 1)
-        iFol.add(mat, "iridescenceIOR", 0, 1)
+        iFol.add(mat, "iridescenceIOR", 0, 3)
         // iFol.add(mat.iridescenceThicknessRange, "0")
         iFol.add(mat.iridescenceThicknessRange, "1", 0, 1000).name("Range[1]")
 
@@ -391,8 +397,10 @@ async function setupModels() {
           texDict.anisotropyMap = mat.anisotropyMap
           texParams.anisotropyMap = true
         }
+        const anisoTween = new Tween(mat).to({ anisotropyRotation: Math.PI * 10 }, 1e4)
+        aFol.add(anisoTween, "start")
         aFol
-          .add(anisoTexture.repeat, "x", 1, 100)
+          .add(anisoTexture.repeat, "x", 1, 10)
           .name("texture repeat")
           .onChange((v) => {
             anisoTexture.repeat.setScalar(v)

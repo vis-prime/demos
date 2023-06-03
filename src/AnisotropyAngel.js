@@ -26,6 +26,7 @@ import {
   EquirectangularReflectionMapping,
   CanvasTexture,
   Color,
+  IcosahedronGeometry,
 } from "three"
 
 // Model and Env
@@ -45,6 +46,8 @@ import {
   TiltShiftEffect,
   SMAAEffect,
   FXAAEffect,
+  GodRaysEffect,
+  KernelSize,
 } from "postprocessing"
 import { MODEL_LIST, MODEL_LOADER } from "./MODEL_LIST"
 
@@ -85,6 +88,7 @@ const allEffects = {
   tiltShift: null,
   smaa: null,
   fxaa: null,
+  godRays: null,
 }
 
 let renderPass
@@ -111,7 +115,8 @@ const dummyObj = {
   val: 0,
 }
 const focusTween = new Tween(dummyObj).to({ val: 1 }, 1e6)
-export default async function EffectsPlayground(mainGui) {
+
+export default async function AnisotropyAngel(mainGui) {
   gui = mainGui
   sceneGui = gui.addFolder("Scene")
   stats = new Stats()
@@ -178,6 +183,7 @@ export default async function EffectsPlayground(mainGui) {
 
   setupEffects()
   setupBackground()
+  setupModels()
 
   // sceneGui.add(transformControls, "mode", ["translate", "rotate", "scale"])
 
@@ -264,26 +270,27 @@ function onPointerMove(event) {
 }
 
 async function setupModels() {
-  const geo = new BoxGeometry().translate(0, 0.5, 0)
-  for (let index = 0; index < 500; index++) {
-    const mesh = new Mesh(
-      geo,
-      new MeshStandardMaterial({
-        color: 0x111111 * Math.random(),
-        roughness: MathUtils.randFloat(0.1, 0.9),
-        metalness: MathUtils.randFloat(0.1, 0.9),
-      })
-    )
-    mesh.castShadow = mesh.receiveShadow = true
-    mesh.scale.x = MathUtils.randFloat(0.6, 1.5)
-    mesh.scale.y = MathUtils.randFloat(2, 10)
-    mesh.scale.z = MathUtils.randFloat(0.6, 1.5)
+  const gltf = await MODEL_LOADER(MODEL_LIST.angel.url)
+  gltf.scene.scale.setScalar(10)
+  gltf.scene.traverse((node) => {
+    if (node.material) {
+      node.material.depthWrite = true
+      node.material.depthTest = true
+      // node.material.transparent = false
+      node.material.alphaTest = 0.5
+    }
+  })
+  gltf.scene.scale.setScalar(0.001)
 
-    mesh.position.x = MathUtils.randFloatSpread(50)
-    mesh.position.z = MathUtils.randFloatSpread(50)
+  mainObjects.add(gltf.scene)
 
-    mainObjects.add(mesh)
-  }
+  new Tween(gltf.scene.scale).to({ x: 10, y: 10, z: 10 }).easing(Easing.Quadratic.Out).delay(1200).start()
+
+  const floor = new Mesh(new CircleGeometry(40, 64).rotateX(-Math.PI / 2), new MeshBasicMaterial({ color: 0x0000ff }))
+  floor.receiveShadow = true
+  mainObjects.add(floor)
+
+  addParticles()
 }
 
 async function setupBackground() {
@@ -297,30 +304,6 @@ async function setupBackground() {
   await bg_env.updateAll()
   bg_env.sunLight.visible = false
   bg_env.shadowFloor.visible = false
-
-  const gltf = await MODEL_LOADER(MODEL_LIST.mourner.url)
-  gltf.scene.scale.setScalar(10)
-  gltf.scene.traverse((node) => {
-    if (node.material) {
-      const orgMat = node.material
-      node.material = new MeshBasicMaterial({
-        color: 0x00ff00,
-        aoMap: orgMat.aoMap,
-        // normalMap: orgMat.normalMap,
-      })
-    }
-  })
-  gltf.scene.scale.setScalar(0.001)
-
-  mainObjects.add(gltf.scene)
-
-  new Tween(gltf.scene.scale).to({ x: 10, y: 10, z: 10 }).easing(Easing.Quadratic.Out).delay(1200).start()
-
-  const floor = new Mesh(new CircleGeometry(40, 64).rotateX(-Math.PI / 2), new MeshBasicMaterial({ color: 0x00ff00 }))
-  floor.receiveShadow = true
-  mainObjects.add(floor)
-
-  addParticles()
 
   // Create a canvas element
   const canvas = document.createElement("canvas")
@@ -526,11 +509,37 @@ function setupEffects() {
   // allEffects.smaa = new SMAAEffect()
   // allEffects.fxaa = new FXAAEffect()
 
+  const sun = new Mesh(
+    new IcosahedronGeometry(1, 3),
+    new MeshBasicMaterial({
+      color: 0xffddaa,
+      transparent: true,
+      fog: false,
+    })
+  )
+
+  sun.position.set(0, 20, -50)
+  sun.scale.setScalar(40)
+  sun.updateMatrix()
+  sun.frustumCulled = false
+
+  allEffects.godRays = new GodRaysEffect(camera, sun, {
+    kernelSize: KernelSize.SMALL,
+    density: 0.96,
+    decay: 0.92,
+    weight: 0.3,
+    exposure: 0.54,
+    samples: 32,
+    resolutionScale: 0.5,
+  })
+
+  updateEffects(enabledEffects, allEffects.godRays, true)
+
   const effectsFol = gui.addFolder("POST PROCESSING")
   effectsFol.open()
   const createToggle = (gui, folder, enabledItems, name, effect) => {
     const guiToggle = {
-      enabled: composer.passes.includes(effect),
+      enabled: enabledPasses.includes(effect) || enabledEffects.includes(effect),
       editFolder: null,
     }
 
@@ -608,7 +617,7 @@ function randomDist() {
   const instanceMatrix = new Matrix4()
 
   // Create instanced mesh
-  const instancedMesh = new InstancedMesh(boxGeometry, new MeshBasicMaterial({ color: 0x00ff00 }), numBoxes)
+  const instancedMesh = new InstancedMesh(boxGeometry, new MeshBasicMaterial({ color: 0x0000ff }), numBoxes)
 
   mainObjects.add(instancedMesh)
   instancedMesh.scale.setScalar(0.001)

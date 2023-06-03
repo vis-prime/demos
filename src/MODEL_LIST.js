@@ -46,6 +46,16 @@ export const MODEL_LIST = {
     name: "Project One",
     url: "./models/mercedes_project_one_2k_comp.glb",
   },
+  pots: {
+    name: "Copper pots",
+    url: "./models/copper_pots_2k_comp.glb",
+    attribution: `"3DDecember 2021 - Copper Pots and Pans" (https://skfb.ly/orIyR) by Jack Kelly is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).`,
+  },
+  angel: {
+    name: "Angel wings",
+    url: "./models/aniso_angel_2k_comp.glb",
+    attribution: `Parts used from: "Angel Wings" (https://skfb.ly/6uVyU) by Boooooop is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).`,
+  },
 }
 
 /**
