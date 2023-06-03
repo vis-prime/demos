@@ -27,6 +27,10 @@ import {
   CanvasTexture,
   Color,
   IcosahedronGeometry,
+  MeshPhongMaterial,
+  Clock,
+  AnimationMixer,
+  MeshPhysicalMaterial,
 } from "three"
 
 // Model and Env
@@ -100,10 +104,10 @@ const allGui = {
   n8ao: () => {},
   bloom: () => {},
   chromaticAberration: () => {},
-
   depthOfField: () => {},
   vignette: () => {},
   tiltShift: () => {},
+  godRays: () => {},
 }
 
 const enabledEffects = []
@@ -115,9 +119,13 @@ const dummyObj = {
   val: 0,
 }
 const focusTween = new Tween(dummyObj).to({ val: 1 }, 1e6)
+let clock, mixer
+
+const maxTarget = new Vector3(0, 2, 0)
+const minTarget = new Vector3(0, 10, 0)
 
 export default async function AnisotropyAngel(mainGui) {
-  gui = mainGui
+  ;(clock = new Clock()), (gui = mainGui)
   sceneGui = gui.addFolder("Scene")
   stats = new Stats()
   app.appendChild(stats.dom)
@@ -145,11 +153,19 @@ export default async function AnisotropyAngel(mainGui) {
   // controls
   controls = new OrbitControls(camera, renderer.domElement)
   controls.enableDamping = true // an animation loop is required when either damping or auto-rotation are enabled
+  controls.enablePan = false
   controls.dampingFactor = 0.05
-  controls.minDistance = 0.1
-  controls.maxDistance = 100
-  controls.maxPolarAngle = Math.PI / 1.5
-  controls.target.set(0, 1, 0)
+  controls.minDistance = 10
+  controls.maxDistance = 40
+  controls.minPolarAngle = Math.PI / 4
+  controls.maxPolarAngle = Math.PI / 2
+  controls.minAzimuthAngle = -Math.PI / 2.5
+  controls.maxAzimuthAngle = -controls.minAzimuthAngle
+
+  controls.addEventListener("change", () => {
+    const lerpAlpha = MathUtils.mapLinear(controls.getDistance(), controls.minDistance, controls.maxDistance, 0, 1)
+    controls.target.lerpVectors(minTarget, maxTarget, lerpAlpha)
+  })
 
   transformControls = new TransformControls(camera, renderer.domElement)
   transformControls.addEventListener("dragging-changed", (event) => {
@@ -234,6 +250,7 @@ function render() {
   stats.update()
   update()
   controls.update()
+  mixer?.update(clock.getDelta())
   // renderer.render(scene, camera)
   composer.render()
 }
@@ -271,22 +288,40 @@ function onPointerMove(event) {
 
 async function setupModels() {
   const gltf = await MODEL_LOADER(MODEL_LIST.angel.url)
+  if (gltf.animations) {
+    const animations = gltf.animations
+    mixer = new AnimationMixer(gltf.scene)
+    const idleAction = mixer.clipAction(animations[0])
+    idleAction.play()
+  }
   gltf.scene.scale.setScalar(10)
   gltf.scene.traverse((node) => {
-    if (node.material) {
+    if (node.isMesh) {
+      node.castShadow = true
+      node.receiveShadow = true
+    }
+
+    if (node.material && node.material.transparent) {
       node.material.depthWrite = true
       node.material.depthTest = true
       // node.material.transparent = false
       node.material.alphaTest = 0.5
     }
   })
+  const anisoMesh = gltf.scene.getObjectByName("eyeball")
+
+  anisoMesh.getWorldPosition(minTarget)
+
   gltf.scene.scale.setScalar(0.001)
 
   mainObjects.add(gltf.scene)
 
   new Tween(gltf.scene.scale).to({ x: 10, y: 10, z: 10 }).easing(Easing.Quadratic.Out).delay(1200).start()
 
-  const floor = new Mesh(new CircleGeometry(40, 64).rotateX(-Math.PI / 2), new MeshBasicMaterial({ color: 0x0000ff }))
+  const floor = new Mesh(
+    new CircleGeometry(40, 64).rotateX(-Math.PI / 2),
+    new MeshStandardMaterial({ color: 0x0000ff })
+  )
   floor.receiveShadow = true
   mainObjects.add(floor)
 
@@ -332,7 +367,7 @@ async function setupBackground() {
   //   0xffffeb
   const sunLight = new DirectionalLight("red", 4)
   sunLight.name = "sun"
-  sunLight.position.set(25, 25, 25)
+  sunLight.position.set(0, 25, -25)
   sunLight.castShadow = true
   sunLight.shadow.camera.near = 1
   sunLight.shadow.camera.far = 100
@@ -452,8 +487,10 @@ function setupEffects() {
 
   allPasses.n8ao = new N8AOPostPass(scene, camera)
   composer.addPass(allPasses.n8ao)
-  updateEffects(enabledPasses, allPasses.n8ao, true)
   allPasses.n8ao.configuration.color.set(0x342e84).convertLinearToSRGB()
+  const n8Params = {
+    renderMode: "combined",
+  }
   allGui.n8ao = (aoFol) => {
     aoFol.addColor(allPasses.n8ao.configuration, "color")
     aoFol.add(allPasses.n8ao.configuration, "aoSamples", 1.0, 64.0, 1.0)
@@ -462,6 +499,10 @@ function setupEffects() {
     aoFol.add(allPasses.n8ao.configuration, "aoRadius", 0.01, 10.0, 0.01)
     aoFol.add(allPasses.n8ao.configuration, "distanceFalloff", 0.0, 10.0, 0.01)
     aoFol.add(allPasses.n8ao.configuration, "intensity", 0.0, 20.0, 0.01)
+
+    aoFol.add(n8Params, "renderMode", ["Combined", "AO", "No AO", "Split", "Split AO"]).onChange((v) => {
+      allPasses.n8ao.configuration.renderMode = ["Combined", "AO", "No AO", "Split", "Split AO"].indexOf(v)
+    })
   }
 
   allEffects.bloom = new BloomEffect({
@@ -518,22 +559,41 @@ function setupEffects() {
     })
   )
 
-  sun.position.set(0, 20, -50)
+  sun.position.set(0, 30, -50)
   sun.scale.setScalar(40)
   sun.updateMatrix()
   sun.frustumCulled = false
 
   allEffects.godRays = new GodRaysEffect(camera, sun, {
     kernelSize: KernelSize.SMALL,
-    density: 0.96,
-    decay: 0.92,
-    weight: 0.3,
+    density: 0.65,
+    decay: 0.9,
+    weight: 0.15,
     exposure: 0.54,
     samples: 32,
     resolutionScale: 0.5,
   })
 
+  allGui.godRays = (gui) => {
+    const effect = allEffects.godRays
+    const godRaysMaterial = effect.godRaysMaterial
+    const folder = gui
+    folder.add(effect.resolution, "scale", 0.1, 1, 0.05)
+    folder.add(effect, "blur")
+    folder.add(effect.blurPass, "kernelSize", KernelSize)
+    folder.add(godRaysMaterial, "density", 0, 1, 0.01)
+    folder.add(godRaysMaterial, "decay", 0, 1, 0.01)
+    folder.add(godRaysMaterial, "weight", 0, 1, 0.01)
+    folder.add(godRaysMaterial, "exposure", 0, 1, 0.01)
+    folder.add(godRaysMaterial, "maxIntensity", 0, 1, 0.01)
+    folder.add(godRaysMaterial, "samples", 16, 128, 1)
+    folder.addColor(sun.material, "color").onChange((e) => sun.material.color.convertSRGBToLinear())
+    folder.add(effect.blendMode.opacity, "value", 0, 1, 0.01)
+  }
+
+  updateEffects(enabledPasses, allPasses.n8ao, true)
   updateEffects(enabledEffects, allEffects.godRays, true)
+  updateEffects(enabledEffects, allEffects.bloom, true)
 
   const effectsFol = gui.addFolder("POST PROCESSING")
   effectsFol.open()
@@ -550,18 +610,24 @@ function setupEffects() {
       }
     }
 
+    const create = () => {
+      guiToggle.editFolder = folder.addFolder(name)
+      if (allGui[name]) allGui[name](guiToggle.editFolder)
+    }
+
     gui
       .add(guiToggle, "enabled")
       .name(name)
       .onChange((v) => {
         updateEffects(enabledItems, effect, v)
         if (v) {
-          guiToggle.editFolder = folder.addFolder(name)
-          if (allGui[name]) allGui[name](guiToggle.editFolder)
+          create()
         } else {
           destroy()
         }
       })
+
+    if (guiToggle.enabled) create()
   }
 
   for (const [name, pass] of Object.entries(allPasses)) {
@@ -617,7 +683,7 @@ function randomDist() {
   const instanceMatrix = new Matrix4()
 
   // Create instanced mesh
-  const instancedMesh = new InstancedMesh(boxGeometry, new MeshBasicMaterial({ color: 0x0000ff }), numBoxes)
+  const instancedMesh = new InstancedMesh(boxGeometry, new MeshStandardMaterial({ color: 0x0000ff }), numBoxes)
 
   mainObjects.add(instancedMesh)
   instancedMesh.scale.setScalar(0.001)
@@ -656,6 +722,7 @@ function randomDist() {
   }
 
   // Create and position boxes randomly
+  const vec = new Vector3()
   for (let i = 0; i < numBoxes; i++) {
     let position
     let attempts = 0
@@ -675,13 +742,14 @@ function randomDist() {
       instanceMatrix.identity()
       instanceMatrix.makeRotationY(MathUtils.randFloat(-Math.PI * 0.05, Math.PI * 0.05))
       instanceMatrix.setPosition(position)
-      instanceMatrix.scale(new Vector3(1, MathUtils.randFloat(1, 5), 1))
+      instanceMatrix.scale(vec.set(1, MathUtils.randFloat(0.1, 5), 1))
 
       instancedMesh.setMatrixAt(i, instanceMatrix)
 
       boxPositions.push(position)
     }
   }
-
+  instancedMesh.castShadow = true
+  instancedMesh.receiveShadow = true
   instancedMesh.instanceMatrix.needsUpdate = true // Update instance matrix
 }

@@ -32,6 +32,10 @@ const Demos = {
   AnisotropyAngel: AnisotropyAngel,
 }
 
+let wip = []
+
+wip = [Demos.AnisotropyAngel, Demos.VehicleShowcase, Demos.CSGPlayground, Demos.MaterialSwap]
+
 gui.add(params, "homeButton").name("🔙Home")
 
 const demoContainer = document.createElement("div")
@@ -42,6 +46,8 @@ const HomeDemo = () => {
   gui.destroy()
   for (const name of Object.keys(Demos)) {
     if (name === "Home") continue
+
+    if (wip.includes(Demos[name])) continue
     const button = document.createElement("button")
     button.innerHTML = name
     demoContainer.appendChild(button)
