@@ -31,6 +31,10 @@ import {
   Clock,
   AnimationMixer,
   MeshPhysicalMaterial,
+  LoopOnce,
+  TextureLoader,
+  RepeatWrapping,
+  ClampToEdgeWrapping,
 } from "three"
 
 // Model and Env
@@ -56,6 +60,9 @@ import {
 import { MODEL_LIST, MODEL_LOADER } from "./MODEL_LIST"
 
 let stats,
+  /**
+   * @type {WebGLRenderer}
+   */
   renderer,
   /**
    * @type {EffectComposer}
@@ -125,7 +132,8 @@ const maxTarget = new Vector3(0, 2, 0)
 const minTarget = new Vector3(0, 10, 0)
 
 export default async function AnisotropyAngel(mainGui) {
-  ;(clock = new Clock()), (gui = mainGui)
+  clock = new Clock()
+  gui = mainGui
   sceneGui = gui.addFolder("Scene")
   stats = new Stats()
   app.appendChild(stats.dom)
@@ -220,7 +228,7 @@ export default async function AnisotropyAngel(mainGui) {
     ) {
       // Double click detected
       console.log("Double click detected!")
-      fitModelInViewport(mainObjects)
+      // fitModelInViewport(mainObjects)
     }
     lastPointerEvent = event
     lastClickTime = clickTime
@@ -277,6 +285,9 @@ function raycast() {
   focusTween.start()
   // focusPoint.copy(intersects[0].point)
   // transformControls.attach(intersects[0].object)
+  if (intersects[0].object.onRaycast) {
+    intersects[0].object.onRaycast()
+  }
 
   intersects.length = 0
 }
@@ -287,18 +298,35 @@ function onPointerMove(event) {
 }
 
 async function setupModels() {
-  const gltf = await MODEL_LOADER(MODEL_LIST.angel.url)
-  if (gltf.animations) {
-    const animations = gltf.animations
-    mixer = new AnimationMixer(gltf.scene)
-    const idleAction = mixer.clipAction(animations[0])
-    idleAction.play()
-  }
-  gltf.scene.scale.setScalar(10)
-  gltf.scene.traverse((node) => {
+  const gltfPromise = MODEL_LOADER(MODEL_LIST.angel.url)
+  const texLoader = new TextureLoader()
+  const anisoTexPromise = texLoader.loadAsync("./textures/aniso.png")
+
+  const [anisoTexture, gltf] = await Promise.all([anisoTexPromise, gltfPromise])
+  const model = gltf.scene
+  let featherMesh
+
+  model.scale.setScalar(10)
+  // anisoTexture.wrapS = anisoTexture.wrapT = RepeatWrapping
+
+  let anisoMat
+
+  let normalMap
+
+  model.traverse((node) => {
     if (node.isMesh) {
       node.castShadow = true
       node.receiveShadow = true
+
+      if (node.material.name === "Feather") {
+        featherMesh = node
+      }
+
+      if (node.material.isMeshPhysicalMaterial) {
+        node.material.anisotropy = 1
+        node.material.anisotropyMap = anisoTexture
+        anisoMat = node.material
+      }
     }
 
     if (node.material && node.material.transparent) {
@@ -308,15 +336,210 @@ async function setupModels() {
       node.material.alphaTest = 0.5
     }
   })
-  const anisoMesh = gltf.scene.getObjectByName("eyeball")
+  normalMap = anisoMat.normalMap
+  normalMap.wrapS = normalMap.wrapT = ClampToEdgeWrapping
+  normalMap.needsUpdate = true
+  console.log({ anisoMat, normalMap })
 
-  anisoMesh.getWorldPosition(minTarget)
+  const anisoTween = new Tween(anisoMat).to({ anisotropyRotation: Math.PI * 10 }, 1e4).easing(Easing.Quadratic.InOut)
+  gui.add(anisoTween, "start")
+  gui
+    .add(anisoTexture.repeat, "x", 1, 10)
+    .name("texture repeat")
+    .onChange((v) => {
+      anisoTexture.repeat.setScalar(v)
+    })
 
-  gltf.scene.scale.setScalar(0.001)
+  const anisoMesh = model.getObjectByName("eyeball")
+  const eyelidBottom = model.getObjectByName("eyelid_bottom")
+  const eyelidTop = model.getObjectByName("eyelid_top")
+  const ring1Mesh = model.getObjectByName("ring_1")
+  const ring2Mesh = model.getObjectByName("ring_2")
 
-  mainObjects.add(gltf.scene)
+  gui.add(eyelidTop, "visible")
+  gui.add(eyelidBottom, "visible")
 
-  new Tween(gltf.scene.scale).to({ x: 10, y: 10, z: 10 }).easing(Easing.Quadratic.Out).delay(1200).start()
+  const eyeBallTween = new Tween(anisoMesh.rotation)
+    .to({ y: 0 })
+    .onEveryStart(() => {
+      eyeBallTween._valuesStart = { x: anisoMesh.rotation.x, y: anisoMesh.rotation.y, z: anisoMesh.rotation.z }
+      if (eyeBallTween._repeat === 0) {
+        eyeBallTween._valuesEnd = { x: 0, y: 0 }
+      } else {
+        eyeBallTween._valuesEnd = {
+          x: MathUtils.randFloatSpread(Math.PI / 4),
+          y: MathUtils.randFloatSpread(Math.PI / 4),
+        }
+      }
+      console.log(eyeBallTween._repeat)
+    })
+    .repeat(3)
+    .duration(500)
+    .easing(Easing.Back.Out)
+    .start()
+    .onComplete(() => {
+      setTimeout(() => {
+        eyeBallTween._repeat = MathUtils.randInt(1, 5)
+        eyeBallTween.start()
+        anisoTween.start()
+      }, MathUtils.randInt(2000, 8000))
+    })
+
+  const ring1Tween = new Tween(ring1Mesh.rotation)
+    .to({ x: 0, y: 0, z: 0 })
+    .duration(4e4)
+    .easing(Easing.Quadratic.InOut)
+    .onEveryStart(() => {
+      ring1Tween._valuesStart = {
+        x: ring1Mesh.rotation.x,
+        y: ring1Mesh.rotation.y,
+        z: ring1Mesh.rotation.z,
+      }
+
+      ring1Tween._valuesEnd = {
+        x: MathUtils.randFloatSpread(4 * Math.PI),
+        y: MathUtils.randInt(-10, 10) * Math.PI,
+        z: MathUtils.randFloatSpread(4 * Math.PI),
+      }
+    })
+    .repeat(1000)
+    .start()
+
+  const ring2Tween = new Tween(ring2Mesh.rotation)
+    .to({ x: 0, y: 0, z: 0 })
+    .duration(4e4)
+    .easing(Easing.Quadratic.InOut)
+    .onEveryStart(() => {
+      ring2Tween._valuesStart = {
+        x: ring2Mesh.rotation.x,
+        y: ring2Mesh.rotation.y,
+        z: ring2Mesh.rotation.z,
+      }
+
+      ring2Tween._valuesEnd = {
+        x: MathUtils.randFloatSpread(4 * Math.PI),
+        y: MathUtils.randInt(-10, 10) * Math.PI,
+        z: MathUtils.randFloatSpread(4 * Math.PI),
+      }
+    })
+    .repeat(1000)
+    .start()
+
+  console.log({ ring1Mesh, ring2Mesh })
+  ring1Mesh.children.forEach((mesh) => {
+    mesh.onRaycast = () => {
+      console.log("ring1Mesh")
+      ring1Tween.stop()
+      ring1Tween.start()
+    }
+  })
+
+  ring2Mesh.children.forEach((mesh) => {
+    mesh.onRaycast = () => {
+      console.log("ring2Mesh")
+      ring2Tween.stop()
+      ring2Tween.start()
+    }
+  })
+
+  const eyelidTween = new Tween(eyelidTop.rotation)
+    .to({ x: 0 })
+    .duration(900)
+    .yoyo(true)
+    .repeat(1)
+    // .repeatDelay(500)
+    .easing(Easing.Back.Out)
+
+  const eyelidBTween = new Tween(eyelidBottom.rotation)
+    .to({ x: 0 })
+    .duration(1200)
+    .yoyo(true)
+    .repeat(1)
+    // .repeatDelay(600)
+    .easing(Easing.Back.Out)
+
+  const closeEyes = (duration = 500, delay = 200) => {
+    eyelidTween.repeatDelay(delay + 100 * (Math.random() < 0.5 ? -1 : 1))
+    eyelidBTween.repeatDelay(delay + 100 * (Math.random() < 0.5 ? -1 : 1))
+    eyelidTween.duration(duration + 100 * (Math.random() < 0.5 ? -1 : 1))
+    eyelidBTween.duration(duration + 100 * (Math.random() < 0.5 ? -1 : 1))
+    eyelidTween.start()
+    eyelidBTween.start()
+  }
+
+  eyelidTop.onRaycast = closeEyes
+  eyelidBottom.onRaycast = closeEyes
+
+  console.log({ featherMesh })
+
+  model.scale.setScalar(0.001)
+  model.position.set(0, 100, 0)
+
+  mainObjects.add(model)
+  renderer.compile(scene, camera)
+
+  new Tween(model.position)
+    .to({ x: 0, y: 10, z: 0 })
+    .easing(Easing.Quadratic.Out)
+    .delay(5000)
+    .duration(5000)
+    .onComplete(() => {
+      anisoMesh.getWorldPosition(minTarget)
+      if (gltf.animations) {
+        const animations = gltf.animations
+        console.log({ animations })
+        mixer = new AnimationMixer(gltf.scene)
+        const idleAction = mixer.clipAction(animations[0])
+        idleAction.play()
+
+        const raiseAction = mixer.clipAction(animations[1])
+        raiseAction.loop = LoopOnce
+
+        const coverAction = mixer.clipAction(animations[2])
+        coverAction.loop = LoopOnce
+
+        gui.add(idleAction, "time", 0, idleAction.getClip().duration).listen().disable()
+        gui.add(raiseAction, "time", 0, raiseAction.getClip().duration).listen().disable()
+
+        mixer.addEventListener("finished", (e) => {
+          console.log("finished", e)
+          if (e.action === raiseAction || e.action === coverAction) {
+            idleAction.reset()
+            idleAction.fadeIn(1)
+            idleAction.play()
+          }
+        })
+
+        featherMesh.onRaycast = () => {
+          if (raiseAction.isRunning()) {
+            return
+          }
+
+          if (coverAction.isRunning()) {
+            coverAction.fadeOut(0.1)
+          }
+          raiseAction.reset()
+          raiseAction.crossFadeFrom(idleAction, 0.5)
+          raiseAction.play()
+        }
+
+        anisoMesh.onRaycast = () => {
+          if (coverAction.isRunning()) {
+            return
+          }
+          if (raiseAction.isRunning()) {
+            raiseAction.fadeOut(0.1)
+          }
+          coverAction.reset()
+          coverAction.crossFadeFrom(idleAction, 0.5)
+          coverAction.play()
+          closeEyes(1500, 500)
+          anisoTween.start()
+        }
+      }
+    })
+    .start()
+  new Tween(model.scale).to({ x: 10, y: 10, z: 10 }).easing(Easing.Quadratic.Out).delay(2000).start()
 
   const floor = new Mesh(
     new CircleGeometry(40, 64).rotateX(-Math.PI / 2),
@@ -488,6 +711,8 @@ function setupEffects() {
   allPasses.n8ao = new N8AOPostPass(scene, camera)
   composer.addPass(allPasses.n8ao)
   allPasses.n8ao.configuration.color.set(0x342e84).convertLinearToSRGB()
+  allPasses.n8ao.configuration.intensity = 20
+  allPasses.n8ao.configuration.halfResolution = true
   const n8Params = {
     renderMode: "combined",
   }
