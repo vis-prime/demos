@@ -35,6 +35,7 @@ import {
   TextureLoader,
   RepeatWrapping,
   ClampToEdgeWrapping,
+  Fog,
 } from "three"
 
 // Model and Env
@@ -157,6 +158,11 @@ export default async function AnisotropyAngel(mainGui) {
 
   // custom vector to perform focus
   scene.focus = new Vector3()
+
+  scene.fog = new Fog()
+  sceneGui.addColor(scene.fog, "color")
+  sceneGui.add(scene.fog, "near")
+  sceneGui.add(scene.fog, "far")
 
   // controls
   controls = new OrbitControls(camera, renderer.domElement)
@@ -341,7 +347,12 @@ async function setupModels() {
   normalMap.needsUpdate = true
   console.log({ anisoMat, normalMap })
 
-  const anisoTween = new Tween(anisoMat).to({ anisotropyRotation: Math.PI * 10 }, 1e4).easing(Easing.Quadratic.InOut)
+  const anisoTween = new Tween(anisoMat)
+    .to({ anisotropyRotation: Math.PI * 10 }, 1e4)
+    .easing(Easing.Quadratic.InOut)
+    .onComplete(() => {
+      closeEyes()
+    })
   gui.add(anisoTween, "start")
   gui
     .add(anisoTexture.repeat, "x", 1, 10)
@@ -380,8 +391,8 @@ async function setupModels() {
     .onComplete(() => {
       setTimeout(() => {
         eyeBallTween._repeat = MathUtils.randInt(1, 5)
-        eyeBallTween.start()
-        anisoTween.start()
+        eyeBallTween.startFromCurrentValues()
+        anisoTween.startFromCurrentValues()
       }, MathUtils.randInt(2000, 8000))
     })
 
@@ -403,7 +414,22 @@ async function setupModels() {
       }
     })
     .repeat(1000)
-    .start()
+  // .startFromCurrentValues()
+
+  const ring1Reset = new Tween(ring1Mesh.rotation)
+    .to({ x: -Math.PI / 3, y: 0, z: 0 })
+    .easing(Easing.Back.Out)
+    .duration(4000)
+    .onComplete(() => {
+      ring1Tween.start()
+    })
+  const ring2Reset = new Tween(ring2Mesh.rotation)
+    .to({ x: Math.PI / 3, y: 0, z: 0 })
+    .easing(Easing.Back.Out)
+    .duration(4000)
+    .onComplete(() => {
+      ring2Tween.start()
+    })
 
   const ring2Tween = new Tween(ring2Mesh.rotation)
     .to({ x: 0, y: 0, z: 0 })
@@ -423,14 +449,13 @@ async function setupModels() {
       }
     })
     .repeat(1000)
-    .start()
+  // .startFromCurrentValues()
 
-  console.log({ ring1Mesh, ring2Mesh })
   ring1Mesh.children.forEach((mesh) => {
     mesh.onRaycast = () => {
       console.log("ring1Mesh")
       ring1Tween.stop()
-      ring1Tween.start()
+      ring1Reset.startFromCurrentValues()
     }
   })
 
@@ -438,7 +463,7 @@ async function setupModels() {
     mesh.onRaycast = () => {
       console.log("ring2Mesh")
       ring2Tween.stop()
-      ring2Tween.start()
+      ring2Reset.startFromCurrentValues()
     }
   })
 
@@ -463,8 +488,8 @@ async function setupModels() {
     eyelidBTween.repeatDelay(delay + 100 * (Math.random() < 0.5 ? -1 : 1))
     eyelidTween.duration(duration + 100 * (Math.random() < 0.5 ? -1 : 1))
     eyelidBTween.duration(duration + 100 * (Math.random() < 0.5 ? -1 : 1))
-    eyelidTween.start()
-    eyelidBTween.start()
+    eyelidTween.startFromCurrentValues()
+    eyelidBTween.startFromCurrentValues()
   }
 
   eyelidTop.onRaycast = closeEyes
@@ -481,15 +506,19 @@ async function setupModels() {
   new Tween(model.position)
     .to({ x: 0, y: 10, z: 0 })
     .easing(Easing.Quadratic.Out)
-    .delay(5000)
+    .delay(1000)
     .duration(5000)
     .onComplete(() => {
+      ring1Tween.startFromCurrentValues()
+      ring2Tween.startFromCurrentValues()
       anisoMesh.getWorldPosition(minTarget)
+
       if (gltf.animations) {
         const animations = gltf.animations
         console.log({ animations })
         mixer = new AnimationMixer(gltf.scene)
         const idleAction = mixer.clipAction(animations[0])
+        idleAction.fadeIn(1)
         idleAction.play()
 
         const raiseAction = mixer.clipAction(animations[1])
@@ -534,7 +563,7 @@ async function setupModels() {
           coverAction.crossFadeFrom(idleAction, 0.5)
           coverAction.play()
           closeEyes(1500, 500)
-          anisoTween.start()
+          anisoTween.startFromCurrentValues()
         }
       }
     })
@@ -784,14 +813,14 @@ function setupEffects() {
     })
   )
 
-  sun.position.set(0, 30, -50)
-  sun.scale.setScalar(40)
+  sun.position.set(0, 25, -50)
+  sun.scale.setScalar(30)
   sun.updateMatrix()
   sun.frustumCulled = false
 
   allEffects.godRays = new GodRaysEffect(camera, sun, {
     kernelSize: KernelSize.SMALL,
-    density: 0.65,
+    density: 0.45,
     decay: 0.9,
     weight: 0.15,
     exposure: 0.54,
@@ -814,11 +843,32 @@ function setupEffects() {
     folder.add(godRaysMaterial, "samples", 16, 128, 1)
     folder.addColor(sun.material, "color").onChange((e) => sun.material.color.convertSRGBToLinear())
     folder.add(effect.blendMode.opacity, "value", 0, 1, 0.01)
+    folder
+      .add(sun.position, "y", 0, 50)
+      .name("sun pos y")
+      .onChange(() => {
+        sun.updateMatrix()
+      })
+    folder
+      .add(sun.position, "z", -100, 0)
+      .name("sun pos z")
+      .onChange(() => {
+        sun.updateMatrix()
+      })
+
+    folder
+      .add(sun.scale, "y", 0, 60)
+      .name("sun scale")
+      .onChange((v) => {
+        sun.scale.setScalar(v)
+        sun.updateMatrix()
+      })
   }
 
   updateEffects(enabledPasses, allPasses.n8ao, true)
   updateEffects(enabledEffects, allEffects.godRays, true)
   updateEffects(enabledEffects, allEffects.bloom, true)
+  updateEffects(enabledEffects, allEffects.chromaticAberration, true)
 
   const effectsFol = gui.addFolder("POST PROCESSING")
   effectsFol.open()
