@@ -367,8 +367,8 @@ async function setupModels() {
   const ring1Mesh = model.getObjectByName("ring_1")
   const ring2Mesh = model.getObjectByName("ring_2")
 
-  gui.add(eyelidTop, "visible")
-  gui.add(eyelidBottom, "visible")
+  // gui.add(eyelidTop, "visible")
+  // gui.add(eyelidBottom, "visible")
 
   const eyeBallTween = new Tween(anisoMesh.rotation)
     .to({ y: 0 })
@@ -387,7 +387,6 @@ async function setupModels() {
     .repeat(3)
     .duration(500)
     .easing(Easing.Back.Out)
-    .start()
     .onComplete(() => {
       setTimeout(() => {
         eyeBallTween._repeat = MathUtils.randInt(1, 5)
@@ -395,6 +394,7 @@ async function setupModels() {
         anisoTween.startFromCurrentValues()
       }, MathUtils.randInt(2000, 8000))
     })
+    .startFromCurrentValues()
 
   const ring1Tween = new Tween(ring1Mesh.rotation)
     .to({ x: 0, y: 0, z: 0 })
@@ -495,7 +495,7 @@ async function setupModels() {
   eyelidTop.onRaycast = closeEyes
   eyelidBottom.onRaycast = closeEyes
 
-  console.log({ featherMesh })
+  // console.log({ featherMesh })
 
   model.scale.setScalar(0.001)
   model.position.set(0, 100, 0)
@@ -527,8 +527,8 @@ async function setupModels() {
         const coverAction = mixer.clipAction(animations[2])
         coverAction.loop = LoopOnce
 
-        gui.add(idleAction, "time", 0, idleAction.getClip().duration).listen().disable()
-        gui.add(raiseAction, "time", 0, raiseAction.getClip().duration).listen().disable()
+        // gui.add(idleAction, "time", 0, idleAction.getClip().duration).listen().disable()
+        // gui.add(raiseAction, "time", 0, raiseAction.getClip().duration).listen().disable()
 
         mixer.addEventListener("finished", (e) => {
           console.log("finished", e)
