@@ -38,6 +38,10 @@ import {
   Fog,
   TetrahedronGeometry,
   AnimationAction,
+  AudioListener,
+  Audio as THREEAudio,
+  AudioLoader,
+  AudioAnalyser,
 } from "three"
 
 // Model and Env
@@ -112,6 +116,7 @@ const allPasses = {
 
 const divs = {
   text: null,
+  enterButton: null,
 }
 
 const allGui = {
@@ -138,6 +143,10 @@ let clock, mixer
 const maxTarget = new Vector3(0, 2, 0)
 const minTarget = new Vector3(0, 10, 0)
 
+let audioElem, analyser
+
+let angelStartTw, cityStartTw
+
 export default async function AnisotropyAngel(mainGui) {
   createDivs()
 
@@ -154,6 +163,7 @@ export default async function AnisotropyAngel(mainGui) {
   renderer.shadowMap.type = VSMShadowMap
   renderer.outputColorSpace = SRGBColorSpace
   renderer.toneMapping = ACESFilmicToneMapping
+  renderer.toneMappingExposure = 0
 
   app.appendChild(renderer.domElement)
 
@@ -230,7 +240,7 @@ export default async function AnisotropyAngel(mainGui) {
   setupParticles()
   setupCity()
 
-  divs.text.remove()
+  document.body.appendChild(divs.button)
 
   // sceneGui.add(transformControls, "mode", ["translate", "rotate", "scale"])
 
@@ -266,7 +276,10 @@ export default async function AnisotropyAngel(mainGui) {
     focusPoint.lerp(dummyObj.toFocus, 0.1)
   })
 
-  animate()
+  // animate()
+
+  renderer.compile(scene, camera)
+  render()
 }
 
 function createDivs() {
@@ -285,6 +298,65 @@ function createDivs() {
   textDiv.style.fontFamily = "Arial, sans-serif"
   textDiv.style.width = "100%"
   document.body.appendChild(textDiv)
+
+  const button = document.createElement("button")
+  divs.button = button
+  button.textContent = "Begin"
+  button.style.position = "fixed"
+  button.style.top = "60%"
+  button.style.left = "50%"
+  button.style.transform = "translate(-50%, -50%)"
+  button.style.padding = "10px 20px"
+  button.style.fontSize = "1.5rem"
+  button.style.backgroundColor = "blue"
+  button.style.color = "white"
+  button.style.border = "none"
+  button.style.borderRadius = "5px"
+  button.onclick = async () => {
+    button.remove()
+    textDiv.remove()
+    await setupAudio()
+    startShow()
+  }
+  // textDiv.appendChild(button)
+}
+
+async function setupAudio() {
+  const listener = new AudioListener()
+
+  const audio = new THREEAudio(listener)
+  const audioFiltered = new THREEAudio(listener)
+  const file = "./audio/watr-fluid-10149.mp3"
+
+  const loader = new AudioLoader()
+  const buffer = await loader.loadAsync(file)
+  audio.setBuffer(buffer)
+  audioFiltered.setBuffer(buffer)
+
+  audioElem = audio
+
+  console.warn({ audio })
+
+  // Create a low-pass filter
+  const context = listener.context
+  const filter = context.createBiquadFilter()
+  filter.type = "lowpass"
+  filter.frequency.value = 100 // Adjust the cutoff frequency as needed
+  // gui.add(filter.frequency, "value", 0, 255)
+  audioFiltered.setFilter(filter)
+
+  const fftSize = 32
+  analyser = new AudioAnalyser(audioFiltered, fftSize)
+
+  audio.play()
+  audioFiltered.play()
+}
+
+function startShow() {
+  animate()
+  // cityStartTw.start()
+  angelStartTw.start()
+  new Tween(renderer).to({ toneMappingExposure: 1 }).duration(8000).easing(Easing.Quadratic.Out).start()
 }
 
 function onWindowResize() {
@@ -660,7 +732,7 @@ function setupCity() {
   mainObjects.add(instancedMesh)
   instancedMesh.scale.y = 0.001
 
-  new Tween(instancedMesh.scale).to({ x: 1, y: 1, z: 1 }).easing(Easing.Back.Out).duration(2000).delay(100).start()
+  // cityStartTw = new Tween(instancedMesh.scale).to({ x: 1, y: 1, z: 1 }).easing(Easing.Back.Out).duration(1000)
 
   // Array to store box positions
   const boxPositions = []
@@ -694,36 +766,63 @@ function setupCity() {
   }
 
   // Create and position boxes randomly
+
   const vec = new Vector3()
-  for (let i = 0; i < numBoxes; i++) {
-    let position
-    let attempts = 0
-    do {
-      position = generateRandomPosition()
+  function refreshPosScale() {
+    boxPositions.length = 0
 
-      attempts++
-      if (attempts > 1000) {
-        console.log(
-          "Failed to find a suitable position for a box. Consider increasing the circular area or reducing the number of boxes."
-        )
-        break
+    for (let i = 0; i < numBoxes; i++) {
+      let position
+      let attempts = 0
+      do {
+        position = generateRandomPosition()
+
+        attempts++
+        if (attempts > 1000) {
+          console.log(
+            "Failed to find a suitable position for a box. Consider increasing the circular area or reducing the number of boxes."
+          )
+          break
+        }
+      } while (intersectsExistingBoxes(position))
+
+      if (attempts <= 1000) {
+        instanceMatrix.identity()
+        instanceMatrix.makeRotationY(MathUtils.randFloat(-Math.PI * 0.05, Math.PI * 0.05))
+        instanceMatrix.setPosition(position)
+        instanceMatrix.scale(vec.set(1, MathUtils.randFloat(0.1, 5) + position.length() / (radius / 2), 1))
+
+        instancedMesh.setMatrixAt(i, instanceMatrix)
+
+        boxPositions.push(position)
       }
-    } while (intersectsExistingBoxes(position))
-
-    if (attempts <= 1000) {
-      instanceMatrix.identity()
-      instanceMatrix.makeRotationY(MathUtils.randFloat(-Math.PI * 0.05, Math.PI * 0.05))
-      instanceMatrix.setPosition(position)
-      instanceMatrix.scale(vec.set(1, MathUtils.randFloat(0.1, 5), 1))
-
-      instancedMesh.setMatrixAt(i, instanceMatrix)
-
-      boxPositions.push(position)
     }
+
+    instancedMesh.instanceMatrix.needsUpdate = true // Update instance matrix
   }
+
+  refreshPosScale()
+
   instancedMesh.castShadow = true
   instancedMesh.receiveShadow = true
-  instancedMesh.instanceMatrix.needsUpdate = true // Update instance matrix
+  instancedMesh.onRaycast = () => {
+    refreshPosScale()
+  }
+
+  setInterval(() => {
+    if (analyser) {
+      analyser.getFrequencyData()
+
+      // Get the bass frequency range (e.g., index 0 to 10)
+      const bassData = analyser.data.slice(0, 10)
+      // Calculate the average value of the bass range
+      const averageBass = bassData.reduce((a, b) => a + b, 0) / bassData.length
+      // Map the average bass value to the scale of the mesh
+      const scale = MathUtils.mapLinear(averageBass, 30, 70, 0.01, 1)
+
+      instancedMesh.scale.y = scale
+    }
+  }, 80)
 }
 
 const setupParticles = () => {
@@ -869,20 +968,22 @@ async function setupModels() {
       coverAction.crossFadeFrom(idleAction, 0.5)
       coverAction.play()
       closeEyes(1500, 500)
-      anisoRotateTw.startFromCurrentValues()
+      anisoRotateTw.start()
     }
   }
 
   // Aniso tweens
 
   const anisoRotateTw = new Tween(anisoMat)
-    .to({ anisotropyRotation: Math.PI * 10 }, 1e4)
+    .to({ anisotropyRotation: Math.PI * 10 }, 5e3)
     .easing(Easing.Quadratic.InOut)
+    .repeat(1)
+    .yoyo(true)
     .onComplete(() => {
       closeEyes()
     })
   const anisoRepeatTw = new Tween(anisoTexture.repeat)
-    .to({ x: 10, y: 10 }, 500)
+    .to({ x: 10, y: 10 }, 1e3)
     .repeat(1)
     .repeatDelay(200)
     .yoyo(true)
@@ -915,7 +1016,7 @@ async function setupModels() {
         eyeBallTw._repeat = MathUtils.randInt(1, 5)
         eyeBallTw.delay(MathUtils.randInt(100, 1000))
         eyeBallTw.startFromCurrentValues()
-        anisoRotateTw.startFromCurrentValues()
+        anisoRotateTw.start()
       }, MathUtils.randInt(2000, 8000))
     })
 
@@ -1023,11 +1124,16 @@ async function setupModels() {
 
   ring1Tween.startFromCurrentValues()
   ring2Tween.startFromCurrentValues()
-  const posTween = new Tween(model.position)
+
+  angelStartTw = new Tween(model.position)
     .to({ x: 0, y: 10, z: 0 })
     .easing(Easing.Back.Out)
-    .delay(5000)
-    .duration(10000)
+    .duration(13000)
+    .onStart(() => {
+      angelStartTw._valuesStart = { x: 0, y: 15, z: -100 }
+      new Tween(model.scale).to({ x: 10, y: 10, z: 10 }).duration(8000).easing(Easing.Quadratic.Out).delay(3000).start()
+    })
+
     .onComplete(() => {
       anisoMesh.getWorldPosition(minTarget)
 
@@ -1044,8 +1150,6 @@ async function setupModels() {
         })
         .start()
     })
-    .start()
-  new Tween(model.scale).to({ x: 10, y: 10, z: 10 }).duration(8000).easing(Easing.Quadratic.Out).delay(3000).start()
 
   const floor = new Mesh(
     new CircleGeometry(40, 64).rotateX(-Math.PI / 2),
@@ -1054,8 +1158,8 @@ async function setupModels() {
   floor.receiveShadow = true
   mainObjects.add(floor)
 
-  renderer.toneMappingExposure = 0
-  renderer.compile(scene, camera)
-  render()
-  new Tween(renderer).to({ toneMappingExposure: 1 }).duration(8000).easing(Easing.Quadratic.Out).start()
+  model.position.set(0, 0, 0) // for compile to work correctly
 }
+
+// fog far react
+// start in cover mode
