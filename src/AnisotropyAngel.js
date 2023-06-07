@@ -167,7 +167,7 @@ export default async function AnisotropyAngel(mainGui) {
   // custom vector to perform focus
   scene.focus = new Vector3()
 
-  scene.fog = new Fog()
+  scene.fog = new Fog(0xff0000, 1, 100)
   sceneGui.addColor(scene.fog, "color")
   sceneGui.add(scene.fog, "near")
   sceneGui.add(scene.fog, "far")
@@ -272,7 +272,7 @@ export default async function AnisotropyAngel(mainGui) {
 function createDivs() {
   const textDiv = document.createElement("div")
   divs.text = textDiv
-  textDiv.textContent = "Loading"
+  textDiv.textContent = "Be Not Afraid"
   textDiv.id = "text"
   textDiv.style.position = "fixed"
   textDiv.style.top = "50%"
@@ -280,10 +280,10 @@ function createDivs() {
   textDiv.style.transform = "translate(-50%, -50%)"
   textDiv.style.textAlign = "center"
   textDiv.style.color = "white"
-  textDiv.style.textShadow = "2px 2px 3px grey"
-  textDiv.style.fontSize = "20vw" // Use viewport units instead of pixels
+  textDiv.style.textShadow = "8px 8px 8px grey"
+  textDiv.style.fontSize = "10vw" // Use viewport units instead of pixels
   textDiv.style.fontFamily = "Arial, sans-serif"
-
+  textDiv.style.width = "100%"
   document.body.appendChild(textDiv)
 }
 
@@ -557,6 +557,7 @@ function setupEffects() {
   updateEffects(enabledEffects, allEffects.godRays, true)
   updateEffects(enabledEffects, allEffects.bloom, true)
   updateEffects(enabledEffects, allEffects.chromaticAberration, true)
+  updateEffects(enabledEffects, allEffects.vignette, true)
 
   const effectsFol = gui.addFolder("POST PROCESSING")
   effectsFol.open()
@@ -627,6 +628,14 @@ function updateEffects(array, item, add = true) {
   composer.addPass(renderPass)
   if (enabledPasses.includes(allPasses.n8ao)) {
     composer.addPass(allPasses.n8ao, 1)
+  }
+
+  if (enabledEffects.includes(allEffects.depthOfField)) {
+    const index = enabledEffects.indexOf(allEffects.depthOfField)
+    if (index > 0) {
+      enabledEffects.splice(index, 1)
+      enabledEffects.unshift(allEffects.depthOfField)
+    }
   }
 
   if (enabledEffects.length) composer.addPass(new EffectPass(camera, ...enabledEffects))
@@ -797,10 +806,16 @@ async function setupModels() {
   })
 
   const anisoMesh = model.getObjectByName("eyeball")
-  const eyelidBottom = model.getObjectByName("eyelid_bottom")
+  const eyelidBot = model.getObjectByName("eyelid_bottom")
   const eyelidTop = model.getObjectByName("eyelid_top")
   const ring1Mesh = model.getObjectByName("ring_1")
   const ring2Mesh = model.getObjectByName("ring_2")
+
+  const eyeLidTopOpenRot = eyelidTop.rotation.clone()
+  const eyeLidBotOpenRot = eyelidBot.rotation.clone()
+
+  eyelidTop.rotation.set(0, 0, 0)
+  eyelidBot.rotation.set(0, 0, 0)
 
   const normalMap = anisoMat.normalMap
   normalMap.wrapS = normalMap.wrapT = ClampToEdgeWrapping
@@ -866,8 +881,10 @@ async function setupModels() {
     .onComplete(() => {
       closeEyes()
     })
-  const anisoRepeatTw = new Tween(anisoMat.repeat)
-    .to({ x: 10, y: 10 }, 5e4)
+  const anisoRepeatTw = new Tween(anisoTexture.repeat)
+    .to({ x: 10, y: 10 }, 500)
+    .repeat(1)
+    .repeatDelay(200)
     .yoyo(true)
     .easing(Easing.Quadratic.InOut)
     .onComplete(() => {
@@ -896,11 +913,11 @@ async function setupModels() {
     .onComplete(() => {
       setTimeout(() => {
         eyeBallTw._repeat = MathUtils.randInt(1, 5)
+        eyeBallTw.delay(MathUtils.randInt(100, 1000))
         eyeBallTw.startFromCurrentValues()
         anisoRotateTw.startFromCurrentValues()
       }, MathUtils.randInt(2000, 8000))
     })
-    .startFromCurrentValues()
 
   // rings tweens
   const ring1Reset = new Tween(ring1Mesh.rotation)
@@ -978,7 +995,7 @@ async function setupModels() {
     .repeat(1)
     .easing(Easing.Back.Out)
 
-  const eyelidBTween = new Tween(eyelidBottom.rotation)
+  const eyelidBTween = new Tween(eyelidBot.rotation)
     .to({ x: 0 })
     .duration(1200)
     .yoyo(true)
@@ -992,28 +1009,40 @@ async function setupModels() {
     eyelidBTween.duration(duration + 100 * (Math.random() < 0.5 ? -1 : 1))
     eyelidTween.startFromCurrentValues()
     eyelidBTween.startFromCurrentValues()
+
+    anisoRepeatTw.startFromCurrentValues()
   }
 
   eyelidTop.onRaycast = closeEyes
-  eyelidBottom.onRaycast = closeEyes
+  eyelidBot.onRaycast = closeEyes
 
   model.scale.setScalar(0.001)
   model.position.set(0, 15, -100)
 
   mainObjects.add(model)
 
+  ring1Tween.startFromCurrentValues()
+  ring2Tween.startFromCurrentValues()
   const posTween = new Tween(model.position)
     .to({ x: 0, y: 10, z: 0 })
     .easing(Easing.Back.Out)
     .delay(5000)
-    .duration(15000)
+    .duration(10000)
     .onComplete(() => {
-      ring1Tween.startFromCurrentValues()
-      ring2Tween.startFromCurrentValues()
       anisoMesh.getWorldPosition(minTarget)
 
       idleAction.fadeIn(1)
       idleAction.play()
+
+      new Tween(eyelidBot.rotation).to({ x: eyeLidBotOpenRot.x }).easing(Easing.Back.Out).start()
+
+      new Tween(eyelidTop.rotation)
+        .to({ x: eyeLidTopOpenRot.x })
+        .easing(Easing.Back.Out)
+        .onComplete(() => {
+          eyeBallTw.startFromCurrentValues()
+        })
+        .start()
     })
     .start()
   new Tween(model.scale).to({ x: 10, y: 10, z: 10 }).duration(8000).easing(Easing.Quadratic.Out).delay(3000).start()
