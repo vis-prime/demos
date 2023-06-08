@@ -344,13 +344,11 @@ async function setupAudio() {
 
   const audio = new THREEAudio(listener)
   const audioFiltered = new THREEAudio(listener)
-  const file = "./audio/watr-fluid-10149.mp3"
+  // const file = "./audio/watr-fluid-10149.mp3"
 
   // const loader = new AudioLoader()
   // const buffer = await loader.loadAsync(file)
   const buffer = await listener.context.decodeAudioData(audioArrayBuffer)
-  audio.setBuffer(buffer)
-  audioFiltered.setBuffer(buffer)
   audio.setBuffer(buffer)
   audioFiltered.setBuffer(buffer)
 
