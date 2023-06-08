@@ -65,6 +65,7 @@ import {
   KernelSize,
 } from "postprocessing"
 import { MODEL_LIST, MODEL_LOADER } from "./MODEL_LIST"
+import { CameraShake } from "./CameraShake"
 
 let stats,
   /**
@@ -143,9 +144,11 @@ let clock, mixer
 const maxTarget = new Vector3(0, 2, 0)
 const minTarget = new Vector3(0, 10, 0)
 
-let audioElem, analyser
+let audioTracks = [],
+  analyser,
+  audioArrayBuffer
 
-let angelStartTw, cityStartTw
+let angelStartTw
 
 export default async function AnisotropyAngel(mainGui) {
   createDivs()
@@ -181,6 +184,9 @@ export default async function AnisotropyAngel(mainGui) {
   sceneGui.addColor(scene.fog, "color")
   sceneGui.add(scene.fog, "near")
   sceneGui.add(scene.fog, "far")
+
+  const cameraShake = CameraShake(camera, controls)
+  console.warn({ cameraShake })
 
   // controls
   controls = new OrbitControls(camera, renderer.domElement)
@@ -235,7 +241,7 @@ export default async function AnisotropyAngel(mainGui) {
   console.log("loading...")
   setupEffects()
 
-  await Promise.all([setupBackground(), setupModels()])
+  await Promise.all([setupBackground(), setupModels(), loadAudioBuffer()])
   console.log("loading done!")
   setupParticles()
   setupCity()
@@ -315,10 +321,22 @@ function createDivs() {
   button.onclick = async () => {
     button.remove()
     textDiv.remove()
-    await setupAudio()
+
     startShow()
   }
   // textDiv.appendChild(button)
+}
+
+// Function to load and set the audio buffer
+const loadAudioBuffer = async () => {
+  const file = "./audio/watr-fluid-10149.mp3"
+
+  try {
+    const response = await fetch(file)
+    audioArrayBuffer = await response.arrayBuffer()
+  } catch (error) {
+    console.error("Error loading audio:", error)
+  }
 }
 
 async function setupAudio() {
@@ -328,12 +346,13 @@ async function setupAudio() {
   const audioFiltered = new THREEAudio(listener)
   const file = "./audio/watr-fluid-10149.mp3"
 
-  const loader = new AudioLoader()
-  const buffer = await loader.loadAsync(file)
+  // const loader = new AudioLoader()
+  // const buffer = await loader.loadAsync(file)
+  const buffer = await listener.context.decodeAudioData(audioArrayBuffer)
   audio.setBuffer(buffer)
   audioFiltered.setBuffer(buffer)
-
-  audioElem = audio
+  audio.setBuffer(buffer)
+  audioFiltered.setBuffer(buffer)
 
   console.warn({ audio })
 
@@ -354,9 +373,9 @@ async function setupAudio() {
 
 function startShow() {
   animate()
-  // cityStartTw.start()
   angelStartTw.start()
   new Tween(renderer).to({ toneMappingExposure: 1 }).duration(8000).easing(Easing.Quadratic.Out).start()
+  setupAudio()
 }
 
 function onWindowResize() {
@@ -366,11 +385,13 @@ function onWindowResize() {
   composer.setSize(window.innerWidth, window.innerHeight)
 }
 
+let delta = 0
 function render() {
+  delta = clock.getDelta()
   stats.update()
   update()
   controls.update()
-  mixer?.update(clock.getDelta())
+  mixer?.update(delta)
   // renderer.render(scene, camera)
   composer.render()
 }
@@ -716,7 +737,7 @@ function updateEffects(array, item, add = true) {
 function setupCity() {
   // Constants
   const radius = 40 // Radius of the circular area
-  const numBoxes = 1000 // Number of boxes
+  const numBoxes = 900 // Number of boxes
   const boxSize = 1 // Size of each box
   const fixedY = 0 // Fixed Y position for all boxes
 
@@ -731,8 +752,6 @@ function setupCity() {
 
   mainObjects.add(instancedMesh)
   instancedMesh.scale.y = 0.001
-
-  // cityStartTw = new Tween(instancedMesh.scale).to({ x: 1, y: 1, z: 1 }).easing(Easing.Back.Out).duration(1000)
 
   // Array to store box positions
   const boxPositions = []
