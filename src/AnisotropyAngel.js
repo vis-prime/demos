@@ -143,12 +143,13 @@ let clock, mixer
 
 const maxTarget = new Vector3(0, 2, 0)
 const minTarget = new Vector3(0, 10, 0)
+const unalteredCameraPos = new Vector3(0, 2, 0)
 
-let audioTracks = [],
-  analyser,
-  audioArrayBuffer
+let analyser, audioArrayBuffer
 
 let angelStartTw
+let cameraShake, shakeTween
+let wingRoot
 
 export default async function AnisotropyAngel(mainGui) {
   createDivs()
@@ -172,7 +173,7 @@ export default async function AnisotropyAngel(mainGui) {
 
   // camera
   camera = new PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 150)
-  camera.position.set(0, 5, 25)
+  camera.position.set(0, 8, 30)
   // scene
   scene = new Scene()
   scene.add(mainObjects)
@@ -183,10 +184,7 @@ export default async function AnisotropyAngel(mainGui) {
   scene.fog = new Fog(0xff0000, 1, 100)
   sceneGui.addColor(scene.fog, "color")
   sceneGui.add(scene.fog, "near")
-  sceneGui.add(scene.fog, "far")
-
-  const cameraShake = CameraShake(camera, controls)
-  console.warn({ cameraShake })
+  sceneGui.add(scene.fog, "far").listen()
 
   // controls
   controls = new OrbitControls(camera, renderer.domElement)
@@ -200,9 +198,25 @@ export default async function AnisotropyAngel(mainGui) {
   controls.minAzimuthAngle = -Math.PI / 2.5
   controls.maxAzimuthAngle = -controls.minAzimuthAngle
 
+  cameraShake = CameraShake(camera, controls)
+  console.warn({ cameraShake })
+  cameraShake.addGui(gui)
+
+  let shakeTimeout
+  shakeTween = new Tween(cameraShake.prop).to({ intensity: 1 }, 2e3).easing(Easing.Quadratic.InOut)
   const cameraMotionLock = () => {
-    const lerpAlpha = MathUtils.mapLinear(controls.getDistance(), controls.minDistance, controls.maxDistance, 0, 1)
+    unalteredCameraPos.copy(camera.position)
+    const dist = controls.getDistance()
+    cameraShake.prop.decay = true
+    const lerpAlpha = MathUtils.mapLinear(dist, controls.minDistance, controls.maxDistance, 0, 1)
     controls.target.lerpVectors(minTarget, maxTarget, lerpAlpha)
+    scene.fog.far = MathUtils.mapLinear(dist, controls.minDistance, controls.maxDistance, 30, 150)
+
+    clearTimeout(shakeTimeout)
+    shakeTimeout = setTimeout(() => {
+      cameraShake.prop.decay = false
+      shakeTween.startFromCurrentValues()
+    }, 200)
   }
 
   controls.addEventListener("change", cameraMotionLock)
@@ -247,10 +261,6 @@ export default async function AnisotropyAngel(mainGui) {
   setupCity()
 
   document.body.appendChild(divs.button)
-
-  // sceneGui.add(transformControls, "mode", ["translate", "rotate", "scale"])
-
-  // await setupModels()
 
   let lastClickTime = 0
   let lastPointerEvent = null
@@ -349,6 +359,9 @@ async function setupAudio() {
   // const loader = new AudioLoader()
   // const buffer = await loader.loadAsync(file)
   const buffer = await listener.context.decodeAudioData(audioArrayBuffer)
+
+  audio.setLoop(true)
+  audioFiltered.setLoop(true)
   audio.setBuffer(buffer)
   audioFiltered.setBuffer(buffer)
 
@@ -383,12 +396,13 @@ function onWindowResize() {
   composer.setSize(window.innerWidth, window.innerHeight)
 }
 
-let delta = 0
 function render() {
-  delta = clock.getDelta()
+  const delta = clock.getDelta()
   stats.update()
   update()
   controls.update()
+  cameraShake.update(clock, delta)
+
   mixer?.update(delta)
   // renderer.render(scene, camera)
   composer.render()
@@ -407,15 +421,34 @@ function raycast() {
   raycaster.intersectObject(mainObjects, true, intersects)
 
   if (!intersects.length) {
-    // transformControls.detach()
+    // n8ao change view
+    if (allPasses.n8ao.configuration.renderMode === 0) {
+      allPasses.n8ao.configuration.renderMode = 1
+      allEffects.bloom.intensity = 0
+    } else {
+      allPasses.n8ao.configuration.renderMode = 0
+      allEffects.bloom.intensity = 15
+    }
+
+    if (wingRoot) {
+      const array = ["x", "y", "z"]
+      const randomValue = array[Math.floor(Math.random() * array.length)]
+
+      new Tween(wingRoot.rotation)
+        .to({ [randomValue]: 2 * Math.PI })
+        .start()
+        .easing(Easing.Back.Out)
+        .onComplete(() => {
+          wingRoot.rotation.set(0, 0, 0)
+        })
+    }
     return
   }
   focusTween.stop()
   dummyObj.toFocus.copy(intersects[0].point)
 
   focusTween.start()
-  // focusPoint.copy(intersects[0].point)
-  // transformControls.attach(intersects[0].object)
+
   if (intersects[0].object.onRaycast) {
     intersects[0].object.onRaycast()
   }
@@ -838,6 +871,7 @@ function setupCity() {
       const scale = MathUtils.mapLinear(averageBass, 30, 70, 0.01, 1)
 
       instancedMesh.scale.y = scale
+      // cameraShake.prop.maxPitch = MathUtils.clamp(MathUtils.mapLinear(averageBass, 60, 70, 0.1, 0.2), 0.1, 0.2)
     }
   }, 80)
 }
@@ -895,7 +929,17 @@ async function setupModels() {
 
   let anisoMat
 
-  let idleAction, raiseAction, coverAction
+  /**
+   * @type {AnimationAction}
+   */
+  let idleAction,
+    /**
+     * @type {AnimationAction}
+     */ raiseAction,
+    /**
+     * @type {AnimationAction}
+     */
+    coverAction
 
   model.traverse((node) => {
     if (node.isMesh) {
@@ -926,6 +970,7 @@ async function setupModels() {
   const eyelidTop = model.getObjectByName("eyelid_top")
   const ring1Mesh = model.getObjectByName("ring_1")
   const ring2Mesh = model.getObjectByName("ring_2")
+  wingRoot = model.getObjectByName("wing_rig")
 
   const eyeLidTopOpenRot = eyelidTop.rotation.clone()
   const eyeLidBotOpenRot = eyelidBot.rotation.clone()
@@ -948,9 +993,12 @@ async function setupModels() {
 
     coverAction = mixer.clipAction(animations[2])
     coverAction.loop = LoopOnce
-
-    // gui.add(idleAction, "time", 0, idleAction.getClip().duration).listen().disable()
-    // gui.add(raiseAction, "time", 0, raiseAction.getClip().duration).listen().disable()
+    coverAction.play()
+    coverAction.halt()
+    coverAction.time = 0.425
+    // coverAction.reset()
+    gui.add(coverAction, "time", 0, coverAction.getClip().duration)
+    gui.add(coverAction, "reset")
 
     mixer.addEventListener("finished", (e) => {
       console.log("finished", e)
@@ -967,8 +1015,9 @@ async function setupModels() {
       }
 
       if (coverAction.isRunning()) {
-        coverAction.fadeOut(0.1)
+        return
       }
+
       raiseAction.reset()
       raiseAction.crossFadeFrom(idleAction, 0.5)
       raiseAction.play()
@@ -1005,9 +1054,6 @@ async function setupModels() {
     .repeatDelay(200)
     .yoyo(true)
     .easing(Easing.Quadratic.InOut)
-    .onComplete(() => {
-      closeEyes()
-    })
 
   // Eye ball look around randomly
 
@@ -1145,17 +1191,23 @@ async function setupModels() {
   angelStartTw = new Tween(model.position)
     .to({ x: 0, y: 10, z: 0 })
     .easing(Easing.Back.Out)
-    .duration(13000)
+    .duration(15000)
     .onStart(() => {
       angelStartTw._valuesStart = { x: 0, y: 15, z: -100 }
-      new Tween(model.scale).to({ x: 10, y: 10, z: 10 }).duration(8000).easing(Easing.Quadratic.Out).delay(3000).start()
+      new Tween(model.scale).to({ x: 10, y: 10, z: 10 }).duration(15000).easing(Easing.Quadratic.Out).start()
     })
-
+    .onUpdate((v, elapsed) => {
+      if (elapsed >= 0.4) {
+        if (idleAction.isRunning()) {
+          return
+        }
+        idleAction.fadeIn(1)
+        coverAction.crossFadeTo(idleAction, 1)
+        idleAction.play()
+      }
+    })
     .onComplete(() => {
       anisoMesh.getWorldPosition(minTarget)
-
-      idleAction.fadeIn(1)
-      idleAction.play()
 
       new Tween(eyelidBot.rotation).to({ x: eyeLidBotOpenRot.x }).easing(Easing.Back.Out).start()
 

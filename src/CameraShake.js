@@ -4,27 +4,42 @@ import { SimplexNoise } from "three/examples/jsm/math/SimplexNoise"
 export const CameraShake = (
   camera,
   defaultControls,
-  {
-    intensity = 1,
-    decay,
-    decayRate = 0.65,
-    maxYaw = 0.1,
-    maxPitch = 0.1,
-    maxRoll = 0.1,
-    yawFrequency = 0.1,
-    pitchFrequency = 0.1,
-    rollFrequency = 0.1,
-  } = {}
+  prop = {
+    intensity: 0,
+    decay: false,
+    decayRate: 0.9,
+    maxYaw: 0.1,
+    maxPitch: 0.1,
+    maxRoll: 0.2,
+    yawFrequency: 0.1,
+    pitchFrequency: 0.1,
+    rollFrequency: 0.1,
+  }
 ) => {
+  console.log({ prop })
   let initialRotation = camera.rotation.clone()
   const yawNoise = new SimplexNoise()
   const pitchNoise = new SimplexNoise()
   const rollNoise = new SimplexNoise()
 
   const constrainIntensity = () => {
-    if (intensity < 0 || intensity > 1) {
-      intensity = intensity < 0 ? 0 : 1
+    if (prop.intensity < 0 || prop.intensity > 1) {
+      prop.intensity = prop.intensity < 0 ? 0 : 1
     }
+  }
+
+  const addGui = (gui) => {
+    const folder = gui.addFolder("cam shake")
+
+    folder.add(prop, "intensity", 0, 5).listen()
+    folder.add(prop, "decay").listen()
+    folder.add(prop, "decayRate", 0, 1)
+    folder.add(prop, "maxYaw", -5, 5).listen()
+    folder.add(prop, "maxPitch", -5, 5).listen()
+    folder.add(prop, "maxRoll", -5, 5).listen()
+    folder.add(prop, "yawFrequency", -5, 5).listen()
+    folder.add(prop, "pitchFrequency", -5, 5).listen()
+    folder.add(prop, "rollFrequency", -5, 5).listen()
   }
 
   /**
@@ -32,15 +47,21 @@ export const CameraShake = (
    * @param {Number} val
    */
   const setIntensity = (val) => {
-    intensity = val
-    constrainIntensity()
+    prop.intensity = val
+    // constrainIntensity()
+    console.log("int", prop.intensity)
+  }
+  const callback = () => void (initialRotation = camera.rotation.clone())
+
+  const disable = () => {
+    if (defaultControls) {
+      defaultControls.removeEventListener("change", callback)
+    }
   }
 
   if (defaultControls) {
-    const callback = () => void (initialRotation = camera.rotation.clone())
     defaultControls.addEventListener("change", callback)
     callback()
-    return () => void defaultControls.removeEventListener("change", callback)
   }
   //  [camera, defaultControls]
 
@@ -50,20 +71,23 @@ export const CameraShake = (
    * @param {Number} delta
    */
   const update = (clock, delta) => {
-    const shake = Math.pow(intensity, 2)
-    const yaw = maxYaw * shake * yawNoise.noise(clock.elapsedTime * yawFrequency, 1)
-    const pitch = maxPitch * shake * pitchNoise.noise(clock.elapsedTime * pitchFrequency, 1)
-    const roll = maxRoll * shake * rollNoise.noise(clock.elapsedTime * rollFrequency, 1)
+    if (!prop.intensity) return
+    const shake = Math.pow(prop.intensity, 2)
+    const yaw = prop.maxYaw * shake * yawNoise.noise(clock.elapsedTime * prop.yawFrequency, 1)
+    const pitch = prop.maxPitch * shake * pitchNoise.noise(clock.elapsedTime * prop.pitchFrequency, 1)
+    const roll = prop.maxRoll * shake * rollNoise.noise(clock.elapsedTime * prop.rollFrequency, 1)
 
     camera.rotation.set(initialRotation.x + pitch, initialRotation.y + yaw, initialRotation.z + roll)
 
-    if (decay && intensity > 0) {
-      intensity -= decayRate * delta
+    if (prop.decay && prop.intensity > 0) {
+      prop.intensity -= prop.decayRate * delta
       constrainIntensity()
     }
   }
 
   return {
+    prop,
+    addGui,
     update,
     setIntensity,
   }
