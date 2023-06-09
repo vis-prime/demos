@@ -1,6 +1,5 @@
 import Stats from "three/examples/jsm/libs/stats.module"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls"
-import { TransformControls } from "three/examples/jsm/controls/TransformControls"
 import {
   ACESFilmicToneMapping,
   PerspectiveCamera,
@@ -11,10 +10,8 @@ import {
   Raycaster,
   Group,
   VSMShadowMap,
-  Box3,
   Vector3,
   MathUtils,
-  SphereGeometry,
   MeshBasicMaterial,
   Mesh,
   InstancedMesh,
@@ -27,10 +24,8 @@ import {
   CanvasTexture,
   Color,
   IcosahedronGeometry,
-  MeshPhongMaterial,
   Clock,
   AnimationMixer,
-  MeshPhysicalMaterial,
   LoopOnce,
   TextureLoader,
   RepeatWrapping,
@@ -40,8 +35,9 @@ import {
   AnimationAction,
   AudioListener,
   Audio as THREEAudio,
-  AudioLoader,
   AudioAnalyser,
+  DirectionalLightHelper,
+  Euler,
 } from "three"
 
 // Model and Env
@@ -80,11 +76,6 @@ let stats,
   pointer = new Vector2()
 
 const mainObjects = new Group()
-
-/**
- * @type {TransformControls}
- */
-let transformControls
 
 const raycaster = new Raycaster()
 const intersects = [] //raycast
@@ -175,19 +166,19 @@ export default async function AnisotropyAngel(mainGui) {
   // custom vector to perform focus
   scene.focus = new Vector3()
 
-  scene.fog = new Fog(0xff0000, 1, 100)
+  // scene.fog = new Fog(0xff0000, 1, 100)
 
   // controls
   controls = new OrbitControls(camera, renderer.domElement)
-  controls.enableDamping = true // an animation loop is required when either damping or auto-rotation are enabled
-  controls.enablePan = false
-  controls.dampingFactor = 0.05
-  controls.minDistance = 10
-  controls.maxDistance = 40
-  controls.minPolarAngle = Math.PI / 4
-  controls.maxPolarAngle = Math.PI / 2
-  controls.minAzimuthAngle = -Math.PI / 2.5
-  controls.maxAzimuthAngle = -controls.minAzimuthAngle
+  // controls.enableDamping = true
+  // controls.enablePan = false
+  // controls.dampingFactor = 0.05
+  // controls.minDistance = 10
+  // controls.maxDistance = 40
+  // controls.minPolarAngle = Math.PI / 4
+  // controls.maxPolarAngle = Math.PI / 2
+  // controls.minAzimuthAngle = -Math.PI / 2.5
+  // controls.maxAzimuthAngle = -controls.minAzimuthAngle
 
   cameraShake = CameraShake(camera, controls)
   console.warn({ cameraShake })
@@ -196,6 +187,7 @@ export default async function AnisotropyAngel(mainGui) {
   let shakeTimeout
   shakeTween = new Tween(cameraShake.prop).to({ intensity: 1 }, 2e3).easing(Easing.Quadratic.InOut)
   const cameraMotionLock = () => {
+    return
     unalteredCameraPos.copy(camera.position)
     const dist = controls.getDistance()
     cameraShake.prop.decay = true
@@ -212,22 +204,6 @@ export default async function AnisotropyAngel(mainGui) {
 
   controls.addEventListener("change", cameraMotionLock)
   cameraMotionLock()
-
-  // transformControls = new TransformControls(camera, renderer.domElement)
-  // transformControls.addEventListener("dragging-changed", (event) => {
-  //   controls.enabled = !event.value
-  //   if (!event.value) {
-  //   }
-  // })
-  // transformControls.showY = false
-  // transformControls.addEventListener("change", () => {
-  //   if (transformControls.object) {
-  //     if (transformControls.object.position.y < 0) {
-  //       transformControls.object.position.y = 0
-  //     }
-  //   }
-  // })
-  // scene.add(transformControls)
 
   window.addEventListener("resize", onWindowResize)
   document.addEventListener("pointermove", onPointerMove)
@@ -292,8 +268,10 @@ export default async function AnisotropyAngel(mainGui) {
 function createDivs() {
   const textDiv = document.createElement("div")
   divs.text = textDiv
-  textDiv.textContent = "Be Not Afraid"
+  textDiv.textContent = ""
   const textList = [
+    "Be",
+    "Be Not",
     "Be Not Afraid",
     "Be Not Afraid.",
     "Be Not Afraid..",
@@ -303,6 +281,12 @@ function createDivs() {
     "Loading..",
     "Loading...",
     "Still Loading...",
+    "Should've added a loading bar",
+    "Sorry",
+    "Sorry :",
+    "Sorry :-",
+    "Sorry :-(",
+    "Yeah, this is taking a while...",
   ]
   textDiv.id = "text"
   textDiv.style.position = "fixed"
@@ -516,7 +500,7 @@ async function setupBackground() {
   console.log(scene.background)
 
   //   0xffffeb
-  const sunLight = new DirectionalLight("red", 4)
+  const sunLight = new DirectionalLight("yellow", 8)
   sunLight.name = "sun"
   sunLight.position.set(0, 25, -25)
   sunLight.castShadow = true
@@ -533,6 +517,8 @@ async function setupBackground() {
   sunLight.shadow.blurSamples = 6
   sunLight.shadow.bias = -0.0005
   scene.add(sunLight)
+  const helper = new DirectionalLightHelper(sunLight)
+  scene.add(helper)
 
   gui.add(sunLight, "intensity", 0.1, 20)
 
@@ -540,20 +526,28 @@ async function setupBackground() {
     val: 0,
   }
   const radius = 25
+  const startAngle = MathUtils.degToRad(-180 + 45)
+  const endAngle = MathUtils.degToRad(0 - 45)
+
   new Tween(twObj)
     .to({ val: 1 })
-    .duration(12e4)
+    .duration(5e3)
+    .yoyo(true)
+    .repeatDelay(200)
+    .easing(Easing.Quadratic.InOut)
     .repeat(1e4)
     .onUpdate((e) => {
+      const angle = MathUtils.lerp(startAngle, endAngle, e.val) // Calculate the angle based on the current progress
+
       // Calculate the new position using sine and cosine functions
+      const x = Math.cos(angle) * radius
+      const z = Math.sin(angle) * radius
 
-      const fullRot = MathUtils.mapLinear(e.val, 0, 1, 0, 2 * Math.PI)
-      const x = Math.cos(fullRot) * radius
-      const z = Math.sin(fullRot) * radius
-
-      // Set the new position of the object
+      // Set the new position of the light
       sunLight.position.x = x
       sunLight.position.z = z
+
+      helper.update()
     })
     .start()
 }
@@ -893,9 +887,9 @@ function setupCity() {
 }
 
 const setupParticles = () => {
-  const spread = 50
+  const spread = 70
 
-  const geo = new TetrahedronGeometry(0.03)
+  const geo = new TetrahedronGeometry(0.05)
   const mat = new MeshBasicMaterial()
   mat.color.setRGB(10, 10, 10)
 
@@ -903,18 +897,32 @@ const setupParticles = () => {
   const matrix = new Matrix4()
   const randomScale = new Vector3()
   const randColor = new Color()
-
+  const radius = spread / 2
+  const euler = new Euler()
+  const spreadAngle = Math.PI * 2 // Adjust the spread angle
   for (let index = 0; index < instancedParticles.count; index++) {
     matrix.identity()
-
-    matrix.setPosition(
-      MathUtils.randFloatSpread(spread),
-      MathUtils.randFloat(0, spread / 2),
-      MathUtils.randFloat(-10, 30)
-    )
-
     randomScale.setScalar(MathUtils.randFloat(1, 3))
     matrix.scale(randomScale)
+    matrix.makeRotationFromEuler(
+      euler.set(
+        MathUtils.randFloatSpread(2 * Math.PI),
+        MathUtils.randFloatSpread(2 * Math.PI),
+        MathUtils.randFloatSpread(2 * Math.PI)
+      )
+    )
+
+    const randomRadius = Math.sqrt(MathUtils.randFloat(0, 1)) * radius // Randomize the radius within the circular region
+    const angle = MathUtils.randFloat(0, spreadAngle)
+    const xPos = Math.cos(angle) * randomRadius
+    const zPos = Math.sin(angle) * randomRadius
+
+    matrix.setPosition(xPos, MathUtils.randFloat(0, radius / 2), zPos)
+    // matrix.setPosition(
+    //   MathUtils.randFloatSpread(spread),
+    //   MathUtils.randFloat(0, spread / 2),
+    //   MathUtils.randFloatSpread(spread)
+    // )
 
     randColor.setHSL(MathUtils.randFloat(0, 1), 1, 0.1)
     randColor.multiplyScalar(10)
