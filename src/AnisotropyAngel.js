@@ -324,9 +324,11 @@ function createDivs() {
     currentIndex = (currentIndex + 1) % textList.length // Move to the next text in the array
 
     // Uncomment the line below if you want to stop after cycling through all texts
-    if (button.parentNode) clearInterval(interval)
-    textDiv.textContent = "B̵͍̝̮͈̓͗̈́̏̌̌ͅȩ̴̫͙̪̟̻̀̋̈́̏̄̅̃̎̈́͘͝ ̵̡̜̰̳̬͖͛̄̒̑n̷͍̭̫̝̰̣̙̫̣͋̐͆̄̇̋̽̈͋̾ǫ̴̨̢̣̙̯̦̦̭͇̥̝͎̼̀͝t̷͎͕̹̪̪͚̣̭͖̗̘̱̃̾ ̴͖̰͕͙̙̗̦͔̫̗̎͑̾̆̉͑̿̅̄́̕A̵̢̧̙̳̭̳͓͋̾̚ͅf̵̞̹̞̆́̋̈́̐̚̚͝r̸̫͔̬̦̞̓̊́̿̊̋́̋̇̑̕ä̸̮̖̏̓͋̄̃́̈́͊̓̃͑͝͝i̸̡͕̮͓̪̼̺̹̖̱͕͐̒̑̆͘ͅḍ̸̢̟̺̘̮̙̻̮̬̘͠"
-    console.log(textList[currentIndex])
+    if (button.parentNode) {
+      clearInterval(interval)
+      textDiv.textContent = "B̵͍̝̮͈̓͗̈́̏̌̌ͅȩ̴̫͙̪̟̻̀̋̈́̏̄̅̃̎̈́͘͝ ̵̡̜̰̳̬͖͛̄̒̑n̷͍̭̫̝̰̣̙̫̣͋̐͆̄̇̋̽̈͋̾ǫ̴̨̢̣̙̯̦̦̭͇̥̝͎̼̀͝t̷͎͕̹̪̪͚̣̭͖̗̘̱̃̾ ̴͖̰͕͙̙̗̦͔̫̗̎͑̾̆̉͑̿̅̄́̕A̵̢̧̙̳̭̳͓͋̾̚ͅf̵̞̹̞̆́̋̈́̐̚̚͝r̸̫͔̬̦̞̓̊́̿̊̋́̋̇̑̕ä̸̮̖̏̓͋̄̃́̈́͊̓̃͑͝͝i̸̡͕̮͓̪̼̺̹̖̱͕͐̒̑̆͘ͅḍ̸̢̟̺̘̮̙̻̮̬̘͠"
+      console.log(textList[currentIndex])
+    }
   }
 
   const interval = setInterval(changeText, 2000)
