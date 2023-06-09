@@ -302,6 +302,7 @@ function createDivs() {
     "Loading.",
     "Loading..",
     "Loading...",
+    "Still Loading...",
   ]
   textDiv.id = "text"
   textDiv.style.position = "fixed"
@@ -756,7 +757,7 @@ function updateEffects(array, item, add = true) {
       array.splice(index, 1)
     }
   }
-  console.log(array)
+  // console.log(array)
   const oldPasses = [...composer.passes]
   composer.removeAllPasses()
 
@@ -900,14 +901,14 @@ const setupParticles = () => {
   const matrix = new Matrix4()
   const randomScale = new Vector3()
   const randColor = new Color()
-  console.log(instancedParticles)
+
   for (let index = 0; index < instancedParticles.count; index++) {
     matrix.identity()
 
     matrix.setPosition(
       MathUtils.randFloatSpread(spread),
       MathUtils.randFloat(0, spread / 2),
-      MathUtils.randFloatSpread(spread)
+      MathUtils.randFloat(-10, 30)
     )
 
     randomScale.setScalar(MathUtils.randFloat(1, 3))
