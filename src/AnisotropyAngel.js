@@ -553,6 +553,7 @@ function setupEffects() {
   composer.addPass(allPasses.n8ao)
   allPasses.n8ao.configuration.color.set(0x342e84).convertLinearToSRGB()
   allPasses.n8ao.configuration.intensity = 20
+  allPasses.n8ao.setQualityMode("Performance ")
   allPasses.n8ao.configuration.halfResolution = true
   const n8Params = {
     renderMode: "combined",
@@ -574,7 +575,7 @@ function setupEffects() {
   allEffects.bloom = new BloomEffect({
     mipmapBlur: true,
     intensity: 15,
-    resolutionScale: 0.5,
+    resolutionScale: 0.3,
   })
   allGui.bloom = (folder) => {
     folder.open()
@@ -594,9 +595,9 @@ function setupEffects() {
   }
 
   allEffects.depthOfField = new DepthOfFieldEffect(camera, {
-    resolutionScale: 0.5,
+    resolutionScale: 0.4,
     bokehScale: 15,
-    worldFocusRange: 30,
+    worldFocusRange: 40,
   })
 
   allEffects.depthOfField.target = focusPoint
@@ -610,7 +611,7 @@ function setupEffects() {
     folder.add(focusPoint, "z", -5, 5)
   }
 
-  allEffects.vignette = new VignetteEffect({ eskil: true })
+  allEffects.vignette = new VignetteEffect({ eskil: true, darkness: 0.5 })
   allEffects.tiltShift = new TiltShiftEffect()
 
   // allEffects.smaa = new SMAAEffect()
@@ -637,7 +638,7 @@ function setupEffects() {
     weight: 0.15,
     exposure: 0.54,
     samples: 32,
-    resolutionScale: 0.5,
+    resolutionScale: 0.3,
   })
 
   allGui.godRays = (gui) => {
@@ -678,6 +679,7 @@ function setupEffects() {
   }
 
   updateEffects(enabledPasses, allPasses.n8ao, true)
+  updateEffects(enabledEffects, allEffects.depthOfField, true)
   updateEffects(enabledEffects, allEffects.godRays, true)
   updateEffects(enabledEffects, allEffects.bloom, true)
   updateEffects(enabledEffects, allEffects.chromaticAberration, true)
@@ -879,11 +881,11 @@ function setupCity() {
 const setupParticles = () => {
   const spread = 50
 
-  const geo = new TetrahedronGeometry(0.02)
+  const geo = new TetrahedronGeometry(0.03)
   const mat = new MeshBasicMaterial()
   mat.color.setRGB(10, 10, 10)
 
-  instancedParticles = new InstancedMesh(geo, mat, 1000)
+  instancedParticles = new InstancedMesh(geo, mat, 800)
   const matrix = new Matrix4()
   const randomScale = new Vector3()
   const randColor = new Color()
@@ -1197,6 +1199,7 @@ async function setupModels() {
       new Tween(model.scale).to({ x: 10, y: 10, z: 10 }).duration(15000).easing(Easing.Quadratic.Out).start()
     })
     .onUpdate((v, elapsed) => {
+      anisoMesh.getWorldPosition(focusPoint)
       if (elapsed >= 0.4) {
         if (idleAction.isRunning()) {
           return
