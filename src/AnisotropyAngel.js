@@ -55,12 +55,8 @@ import {
   BloomEffect,
   ChromaticAberrationEffect,
   EffectPass,
-  SelectiveBloomEffect,
   VignetteEffect,
   DepthOfFieldEffect,
-  TiltShiftEffect,
-  SMAAEffect,
-  FXAAEffect,
   GodRaysEffect,
   KernelSize,
 } from "postprocessing"
@@ -104,7 +100,6 @@ const allEffects = {
 
   depthOfField: null,
   vignette: null,
-  tiltShift: null,
   smaa: null,
   fxaa: null,
   godRays: null,
@@ -126,7 +121,6 @@ const allGui = {
   chromaticAberration: () => {},
   depthOfField: () => {},
   vignette: () => {},
-  tiltShift: () => {},
   godRays: () => {},
 }
 
@@ -182,9 +176,6 @@ export default async function AnisotropyAngel(mainGui) {
   scene.focus = new Vector3()
 
   scene.fog = new Fog(0xff0000, 1, 100)
-  sceneGui.addColor(scene.fog, "color")
-  sceneGui.add(scene.fog, "near")
-  sceneGui.add(scene.fog, "far").listen()
 
   // controls
   controls = new OrbitControls(camera, renderer.domElement)
@@ -222,21 +213,21 @@ export default async function AnisotropyAngel(mainGui) {
   controls.addEventListener("change", cameraMotionLock)
   cameraMotionLock()
 
-  transformControls = new TransformControls(camera, renderer.domElement)
-  transformControls.addEventListener("dragging-changed", (event) => {
-    controls.enabled = !event.value
-    if (!event.value) {
-    }
-  })
-  transformControls.showY = false
-  transformControls.addEventListener("change", () => {
-    if (transformControls.object) {
-      if (transformControls.object.position.y < 0) {
-        transformControls.object.position.y = 0
-      }
-    }
-  })
-  scene.add(transformControls)
+  // transformControls = new TransformControls(camera, renderer.domElement)
+  // transformControls.addEventListener("dragging-changed", (event) => {
+  //   controls.enabled = !event.value
+  //   if (!event.value) {
+  //   }
+  // })
+  // transformControls.showY = false
+  // transformControls.addEventListener("change", () => {
+  //   if (transformControls.object) {
+  //     if (transformControls.object.position.y < 0) {
+  //       transformControls.object.position.y = 0
+  //     }
+  //   }
+  // })
+  // scene.add(transformControls)
 
   window.addEventListener("resize", onWindowResize)
   document.addEventListener("pointermove", onPointerMove)
@@ -302,6 +293,16 @@ function createDivs() {
   const textDiv = document.createElement("div")
   divs.text = textDiv
   textDiv.textContent = "Be Not Afraid"
+  const textList = [
+    "Be Not Afraid",
+    "Be Not Afraid.",
+    "Be Not Afraid..",
+    "Be Not Afraid...",
+    "umm...",
+    "Loading.",
+    "Loading..",
+    "Loading...",
+  ]
   textDiv.id = "text"
   textDiv.style.position = "fixed"
   textDiv.style.top = "50%"
@@ -314,6 +315,20 @@ function createDivs() {
   textDiv.style.fontFamily = "Arial, sans-serif"
   textDiv.style.width = "100%"
   document.body.appendChild(textDiv)
+
+  let currentIndex = 0
+
+  const changeText = () => {
+    textDiv.textContent = textList[currentIndex]
+    currentIndex = (currentIndex + 1) % textList.length // Move to the next text in the array
+
+    // Uncomment the line below if you want to stop after cycling through all texts
+    if (button.parentNode) clearInterval(interval)
+    textDiv.textContent = "B̵͍̝̮͈̓͗̈́̏̌̌ͅȩ̴̫͙̪̟̻̀̋̈́̏̄̅̃̎̈́͘͝ ̵̡̜̰̳̬͖͛̄̒̑n̷͍̭̫̝̰̣̙̫̣͋̐͆̄̇̋̽̈͋̾ǫ̴̨̢̣̙̯̦̦̭͇̥̝͎̼̀͝t̷͎͕̹̪̪͚̣̭͖̗̘̱̃̾ ̴͖̰͕͙̙̗̦͔̫̗̎͑̾̆̉͑̿̅̄́̕A̵̢̧̙̳̭̳͓͋̾̚ͅf̵̞̹̞̆́̋̈́̐̚̚͝r̸̫͔̬̦̞̓̊́̿̊̋́̋̇̑̕ä̸̮̖̏̓͋̄̃́̈́͊̓̃͑͝͝i̸̡͕̮͓̪̼̺̹̖̱͕͐̒̑̆͘ͅḍ̸̢̟̺̘̮̙̻̮̬̘͠"
+    console.log(textList[currentIndex])
+  }
+
+  const interval = setInterval(changeText, 2000)
 
   const button = document.createElement("button")
   divs.button = button
@@ -612,10 +627,6 @@ function setupEffects() {
   }
 
   allEffects.vignette = new VignetteEffect({ eskil: true, darkness: 0.5 })
-  allEffects.tiltShift = new TiltShiftEffect()
-
-  // allEffects.smaa = new SMAAEffect()
-  // allEffects.fxaa = new FXAAEffect()
 
   const sun = new Mesh(
     new IcosahedronGeometry(1, 3),
@@ -998,9 +1009,6 @@ async function setupModels() {
     coverAction.play()
     coverAction.halt()
     coverAction.time = 0.425
-    // coverAction.reset()
-    gui.add(coverAction, "time", 0, coverAction.getClip().duration)
-    gui.add(coverAction, "reset")
 
     mixer.addEventListener("finished", (e) => {
       console.log("finished", e)
