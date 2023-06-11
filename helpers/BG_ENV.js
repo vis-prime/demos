@@ -199,7 +199,6 @@ export class BG_ENV {
     return new Promise(async (resolve) => {
       const data = this.preset
       this.init()
-      // console.log(this)
 
       await Promise.all([this.downloadEnvironment(data), this.downloadBackground(data)])
 
@@ -276,7 +275,6 @@ export class BG_ENV {
       if (this.shadowFloorEnabled) {
         if (!this.shadowFloor.parent) {
           this.scene.add(this.shadowFloor)
-          console.log(this.shadowFloor)
         }
         if (!data.shadowOpacity) {
           this.shadowFloor.material.opacity = data.shadowOpacity
@@ -364,7 +362,6 @@ export class BG_ENV {
       texture.mapping = EquirectangularReflectionMapping
       scene.environment = texture
       env = texture
-      console.log("exr loaded")
     }
 
     if (envDict.hdr) {
@@ -372,7 +369,6 @@ export class BG_ENV {
       texture.mapping = EquirectangularReflectionMapping
       scene.environment = texture
       bg = texture
-      console.log("exr loaded")
     }
 
     if (envDict.webP || envDict.avif) {
@@ -380,7 +376,6 @@ export class BG_ENV {
       texture.mapping = EquirectangularReflectionMapping
       texture.colorSpace = SRGBColorSpace
       scene.background = texture
-      console.log("bg loaded")
 
       if (params.groundProjection) loadGroundProj(params.environment)
     }

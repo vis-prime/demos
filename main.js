@@ -7,6 +7,7 @@ import MaterialSwapDemo from "./src/MaterialSwapDemo"
 import EffectsPlayground from "./src/EffectsPlayground"
 import CSGPlayground from "./src/CSGPlayground"
 import VehicleShowcase from "./src/VehicleShowcase"
+import AnisotropyAngel from "./src/AnisotropyAngel"
 
 const gui = new GUI({ title: "Demos: v" + version, closeFolders: true })
 if (window.innerWidth < window.innerHeight) {
@@ -28,7 +29,12 @@ const Demos = {
   EffectsPlayground: EffectsPlayground,
   CSGPlayground: CSGPlayground,
   VehicleShowcase: VehicleShowcase,
+  AnisotropyAngel: AnisotropyAngel,
 }
+
+let wip = []
+
+wip = [Demos.VehicleShowcase, Demos.CSGPlayground, Demos.MaterialSwap]
 
 gui.add(params, "homeButton").name("🔙Home")
 
@@ -40,6 +46,8 @@ const HomeDemo = () => {
   gui.destroy()
   for (const name of Object.keys(Demos)) {
     if (name === "Home") continue
+
+    if (wip.includes(Demos[name])) continue
     const button = document.createElement("button")
     button.innerHTML = name
     demoContainer.appendChild(button)

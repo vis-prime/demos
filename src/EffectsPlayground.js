@@ -514,7 +514,7 @@ function setupEffects() {
     folder.open()
     folder.add(allEffects.depthOfField, "bokehScale", 1, 20)
     folder.add(allEffects.depthOfField.cocMaterial, "worldFocusRange", 5, 30)
-
+    folder.add(allEffects.depthOfField.resolution, "scale", 0.01, 1)
     folder.add(focusPoint, "x", -5, 5)
     folder.add(focusPoint, "y", -5, 5)
     folder.add(focusPoint, "z", -5, 5)
