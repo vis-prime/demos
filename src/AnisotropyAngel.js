@@ -38,6 +38,8 @@ import {
   AudioAnalyser,
   DirectionalLightHelper,
   Euler,
+  Quaternion,
+  AxesHelper,
 } from "three"
 
 // Model and Env
@@ -79,6 +81,7 @@ const mainObjects = new Group()
 
 const raycaster = new Raycaster()
 const intersects = [] //raycast
+const chromaticAberrationOffset = new Vector2(0.01, 0.01)
 let sceneGui
 /**
  * @type {BG_ENV}
@@ -135,17 +138,19 @@ let analyser, audioArrayBuffer
 let angelStartTw
 let cameraShake, shakeTween
 let wingRoot
+let basicOverrideMaterial
+const focusHelper = new AxesHelper()
 
 export default async function AnisotropyAngel(mainGui) {
   createDivs()
-
+  basicOverrideMaterial = new MeshBasicMaterial()
   clock = new Clock()
   gui = mainGui
   sceneGui = gui.addFolder("Scene")
   stats = new Stats()
   app.appendChild(stats.dom)
   // renderer
-  renderer = new WebGLRenderer({ antialias: false })
+  renderer = new WebGLRenderer({ powerPreference: "high-performance", antialias: false, stencil: false, depth: false })
   renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio))
   renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.shadowMap.enabled = true
@@ -164,30 +169,29 @@ export default async function AnisotropyAngel(mainGui) {
   scene.add(mainObjects)
 
   // custom vector to perform focus
-  scene.focus = new Vector3()
+  scene.focus = focusPoint
 
-  // scene.fog = new Fog(0xff0000, 1, 100)
+  scene.add(focusHelper)
+  scene.fog = new Fog(0xff0000, 1, 100)
 
   // controls
   controls = new OrbitControls(camera, renderer.domElement)
-  // controls.enableDamping = true
-  // controls.enablePan = false
-  // controls.dampingFactor = 0.05
-  // controls.minDistance = 10
-  // controls.maxDistance = 40
-  // controls.minPolarAngle = Math.PI / 4
-  // controls.maxPolarAngle = Math.PI / 2
-  // controls.minAzimuthAngle = -Math.PI / 2.5
-  // controls.maxAzimuthAngle = -controls.minAzimuthAngle
+  controls.enableDamping = true
+  controls.enablePan = false
+  controls.dampingFactor = 0.05
+  controls.minDistance = 10
+  controls.maxDistance = 44
+  controls.minPolarAngle = Math.PI / 4
+  controls.maxPolarAngle = Math.PI / 2
+  controls.minAzimuthAngle = -Math.PI / 2.5
+  controls.maxAzimuthAngle = -controls.minAzimuthAngle
 
   cameraShake = CameraShake(camera, controls)
-  console.warn({ cameraShake })
-  cameraShake.addGui(gui)
+  // cameraShake.addGui(gui)
 
   let shakeTimeout
   shakeTween = new Tween(cameraShake.prop).to({ intensity: 1 }, 2e3).easing(Easing.Quadratic.InOut)
   const cameraMotionLock = () => {
-    return
     unalteredCameraPos.copy(camera.position)
     const dist = controls.getDistance()
     cameraShake.prop.decay = true
@@ -219,11 +223,9 @@ export default async function AnisotropyAngel(mainGui) {
     }
   })
 
-  console.log("loading...")
   setupEffects()
 
   await Promise.all([setupBackground(), setupModels(), loadAudioBuffer()])
-  console.log("loading done!")
   setupParticles()
   setupCity()
 
@@ -241,7 +243,7 @@ export default async function AnisotropyAngel(mainGui) {
       calculateDistance(lastPointerEvent.clientX, lastPointerEvent.clientY, event.clientX, event.clientY) < 10
     ) {
       // Double click detected
-      console.log("Double click detected!")
+      // console.log("Double click detected!")
       // fitModelInViewport(mainObjects)
     }
     lastPointerEvent = event
@@ -257,6 +259,7 @@ export default async function AnisotropyAngel(mainGui) {
 
   focusTween.onUpdate(() => {
     focusPoint.lerp(dummyObj.toFocus, 0.1)
+    focusHelper.position.copy(focusPoint)
   })
 
   // animate()
@@ -276,16 +279,12 @@ function createDivs() {
     "Be Not Afraid.",
     "Be Not Afraid..",
     "Be Not Afraid...",
-    "umm...",
     "Loading.",
     "Loading..",
     "Loading...",
+    "umm...",
     "Still Loading...",
     "Should've added a loading bar",
-    "Sorry",
-    "Sorry :",
-    "Sorry :-",
-    "Sorry :-(",
     "Yeah, this is taking a while...",
   ]
   textDiv.id = "text"
@@ -311,7 +310,6 @@ function createDivs() {
     if (button.parentNode) {
       clearInterval(interval)
       textDiv.textContent = "B̵͍̝̮͈̓͗̈́̏̌̌ͅȩ̴̫͙̪̟̻̀̋̈́̏̄̅̃̎̈́͘͝ ̵̡̜̰̳̬͖͛̄̒̑n̷͍̭̫̝̰̣̙̫̣͋̐͆̄̇̋̽̈͋̾ǫ̴̨̢̣̙̯̦̦̭͇̥̝͎̼̀͝t̷͎͕̹̪̪͚̣̭͖̗̘̱̃̾ ̴͖̰͕͙̙̗̦͔̫̗̎͑̾̆̉͑̿̅̄́̕A̵̢̧̙̳̭̳͓͋̾̚ͅf̵̞̹̞̆́̋̈́̐̚̚͝r̸̫͔̬̦̞̓̊́̿̊̋́̋̇̑̕ä̸̮̖̏̓͋̄̃́̈́͊̓̃͑͝͝i̸̡͕̮͓̪̼̺̹̖̱͕͐̒̑̆͘ͅḍ̸̢̟̺̘̮̙̻̮̬̘͠"
-      console.log(textList[currentIndex])
     }
   }
 
@@ -366,8 +364,6 @@ async function setupAudio() {
   audioFiltered.setLoop(true)
   audio.setBuffer(buffer)
   audioFiltered.setBuffer(buffer)
-
-  console.warn({ audio })
 
   // Create a low-pass filter
   const context = listener.context
@@ -427,9 +423,11 @@ function raycast() {
     if (allPasses.n8ao.configuration.renderMode === 0) {
       allPasses.n8ao.configuration.renderMode = 1
       allEffects.bloom.intensity = 0
+      scene.overrideMaterial = basicOverrideMaterial
     } else {
       allPasses.n8ao.configuration.renderMode = 0
       allEffects.bloom.intensity = 15
+      scene.overrideMaterial = null
     }
 
     if (wingRoot) {
@@ -497,8 +495,6 @@ async function setupBackground() {
   gTexture.mapping = EquirectangularReflectionMapping
   scene.background = gTexture
 
-  console.log(scene.background)
-
   //   0xffffeb
   const sunLight = new DirectionalLight("yellow", 8)
   sunLight.name = "sun"
@@ -517,8 +513,8 @@ async function setupBackground() {
   sunLight.shadow.blurSamples = 6
   sunLight.shadow.bias = -0.0005
   scene.add(sunLight)
-  const helper = new DirectionalLightHelper(sunLight)
-  scene.add(helper)
+  // const helper = new DirectionalLightHelper(sunLight)
+  // scene.add(helper)
 
   gui.add(sunLight, "intensity", 0.1, 20)
 
@@ -547,7 +543,7 @@ async function setupBackground() {
       sunLight.position.x = x
       sunLight.position.z = z
 
-      helper.update()
+      // helper.update()
     })
     .start()
 }
@@ -559,13 +555,10 @@ function setupEffects() {
 
   renderPass = new RenderPass(scene, camera)
 
-  composer.addPass(renderPass)
-
   allPasses.n8ao = new N8AOPostPass(scene, camera)
-  composer.addPass(allPasses.n8ao)
   allPasses.n8ao.configuration.color.set(0x342e84).convertLinearToSRGB()
   allPasses.n8ao.configuration.intensity = 20
-  allPasses.n8ao.setQualityMode("Performance ")
+  allPasses.n8ao.setQualityMode("Medium")
   allPasses.n8ao.configuration.halfResolution = true
   const n8Params = {
     renderMode: "combined",
@@ -596,7 +589,7 @@ function setupEffects() {
 
   allEffects.chromaticAberration = new ChromaticAberrationEffect({
     modulationOffset: 0.5,
-    offset: new Vector2(0.01, 0.01),
+    offset: chromaticAberrationOffset,
     radialModulation: true,
   })
   allGui.chromaticAberration = (folder) => {
@@ -616,11 +609,11 @@ function setupEffects() {
   allGui.depthOfField = (folder) => {
     folder.open()
     folder.add(allEffects.depthOfField, "bokehScale", 1, 20)
-    folder.add(allEffects.depthOfField.cocMaterial, "worldFocusRange", 5, 30)
+    folder.add(allEffects.depthOfField.cocMaterial, "worldFocusRange", 5, 60)
     folder.add(allEffects.depthOfField.resolution, "scale", 0.01, 1)
-    folder.add(focusPoint, "x", -5, 5)
-    folder.add(focusPoint, "y", -5, 5)
-    folder.add(focusPoint, "z", -5, 5)
+    folder.add(focusPoint, "x", -25, 25).listen()
+    folder.add(focusPoint, "y", -25, 25).listen()
+    folder.add(focusPoint, "z", -25, 25).listen()
   }
 
   allEffects.vignette = new VignetteEffect({ eskil: true, darkness: 0.5 })
@@ -686,18 +679,34 @@ function setupEffects() {
       })
   }
 
-  updateEffects(enabledPasses, allPasses.n8ao, true)
-  updateEffects(enabledEffects, allEffects.depthOfField, true)
-  updateEffects(enabledEffects, allEffects.godRays, true)
-  updateEffects(enabledEffects, allEffects.bloom, true)
-  updateEffects(enabledEffects, allEffects.chromaticAberration, true)
-  updateEffects(enabledEffects, allEffects.vignette, true)
+  composer.addPass(renderPass)
+  composer.addPass(allPasses.n8ao)
+
+  composer.addPass(
+    new EffectPass(
+      camera,
+
+      // allEffects.depthOfField,
+      allEffects.godRays,
+      allEffects.bloom,
+      allEffects.chromaticAberration,
+      allEffects.vignette
+    )
+  )
+
+  composer.addPass(
+    new EffectPass(
+      camera,
+
+      allEffects.depthOfField
+    )
+  )
 
   const effectsFol = gui.addFolder("POST PROCESSING")
   effectsFol.open()
   const createToggle = (gui, folder, enabledItems, name, effect) => {
     const guiToggle = {
-      enabled: enabledPasses.includes(effect) || enabledEffects.includes(effect),
+      enabled: true,
       editFolder: null,
     }
 
@@ -713,17 +722,17 @@ function setupEffects() {
       if (allGui[name]) allGui[name](guiToggle.editFolder)
     }
 
-    gui
-      .add(guiToggle, "enabled")
-      .name(name)
-      .onChange((v) => {
-        updateEffects(enabledItems, effect, v)
-        if (v) {
-          create()
-        } else {
-          destroy()
-        }
-      })
+    // gui
+    //   .add(guiToggle, "enabled")
+    //   .name(name)
+    //   .onChange((v) => {
+    //     updateEffects(enabledItems, effect, v)
+    //     if (v) {
+    //       create()
+    //     } else {
+    //       destroy()
+    //     }
+    //   })
 
     if (guiToggle.enabled) create()
   }
@@ -753,7 +762,6 @@ function updateEffects(array, item, add = true) {
       array.splice(index, 1)
     }
   }
-  // console.log(array)
   const oldPasses = [...composer.passes]
   composer.removeAllPasses()
 
@@ -858,7 +866,7 @@ function setupCity() {
       }
     }
 
-    instancedMesh.instanceMatrix.needsUpdate = true // Update instance matrix
+    instancedMesh.instanceMatrix.needsUpdate = true
   }
 
   refreshPosScale()
@@ -866,7 +874,7 @@ function setupCity() {
   instancedMesh.castShadow = true
   instancedMesh.receiveShadow = true
   instancedMesh.onRaycast = () => {
-    refreshPosScale()
+    shiftHue()
   }
 
   setInterval(() => {
@@ -884,6 +892,34 @@ function setupCity() {
       // cameraShake.prop.maxPitch = MathUtils.clamp(MathUtils.mapLinear(averageBass, 60, 70, 0.1, 0.2), 0.1, 0.2)
     }
   }, 80)
+
+  const floor = new Mesh(
+    new CircleGeometry(40, 64).rotateX(-Math.PI / 2),
+    new MeshStandardMaterial({ color: 0x0000ff })
+  )
+  floor.receiveShadow = true
+  mainObjects.add(floor)
+  const hsl = {}
+  const colorA = new Color()
+  const colorB = new Color()
+  const shiftHue = () => {
+    floor.material.color.getHSL(hsl)
+    hsl.h += 0.1 % 1
+    hsl.l = 0.5
+    floor.material.color.setHSL(hsl.h, hsl.s, hsl.l)
+    instancedMesh.material.color.copy(floor.material.color)
+
+    scene.fog.color.getHSL(hsl)
+    hsl.h += 0.1 % 1
+    scene.fog.color.setHSL(hsl.h, hsl.s, hsl.l)
+
+    allPasses.n8ao.configuration.color.getHSL(hsl)
+    hsl.h += 0.1 % 1
+    allPasses.n8ao.configuration.color.setHSL(hsl.h, hsl.s, hsl.l)
+  }
+  floor.onRaycast = () => {
+    refreshPosScale()
+  }
 }
 
 const setupParticles = () => {
@@ -918,11 +954,6 @@ const setupParticles = () => {
     const zPos = Math.sin(angle) * randomRadius
 
     matrix.setPosition(xPos, MathUtils.randFloat(0, radius / 2), zPos)
-    // matrix.setPosition(
-    //   MathUtils.randFloatSpread(spread),
-    //   MathUtils.randFloat(0, spread / 2),
-    //   MathUtils.randFloatSpread(spread)
-    // )
 
     randColor.setHSL(MathUtils.randFloat(0, 1), 1, 0.1)
     randColor.multiplyScalar(10)
@@ -1008,7 +1039,6 @@ async function setupModels() {
 
   if (gltf.animations) {
     const animations = gltf.animations
-    console.log({ animations })
     mixer = new AnimationMixer(gltf.scene)
     idleAction = mixer.clipAction(animations[0])
 
@@ -1022,7 +1052,6 @@ async function setupModels() {
     coverAction.time = 0.425
 
     mixer.addEventListener("finished", (e) => {
-      console.log("finished", e)
       if (e.action === raiseAction || e.action === coverAction) {
         idleAction.reset()
         idleAction.fadeIn(1)
@@ -1056,6 +1085,7 @@ async function setupModels() {
       coverAction.play()
       closeEyes(1500, 500)
       anisoRotateTw.start()
+      redEyeTw.start()
     }
   }
 
@@ -1077,6 +1107,28 @@ async function setupModels() {
     .easing(Easing.Quadratic.InOut)
 
   // Eye ball look around randomly
+  const colObj = { val: 0 }
+
+  const redCol = new Color("#f7a8a8")
+  const originalColor = anisoMesh.material.color.clone()
+  const orgWingColor = featherMesh.material.color.clone()
+  const startCA = chromaticAberrationOffset.x
+  const endCA = startCA + 0.01
+
+  const redEyeTw = new Tween(colObj)
+    .to({ val: 1 }, 1e3)
+    .yoyo(true)
+    .repeat(1)
+    .easing(Easing.Sinusoidal.InOut)
+    .repeatDelay(2e3)
+    .onUpdate(() => {
+      anisoMesh.material.color.lerpColors(originalColor, redCol, colObj.val)
+      featherMesh.material.color.lerpColors(orgWingColor, redCol, colObj.val)
+      chromaticAberrationOffset.x = MathUtils.lerp(startCA, endCA, colObj.val)
+      chromaticAberrationOffset.y = MathUtils.lerp(startCA, endCA, colObj.val)
+      allEffects.chromaticAberration.modulationOffset = MathUtils.lerp(0.5, 0, colObj.val)
+    })
+  gui.addColor(anisoMesh.material, "color").listen()
 
   const eyeBallTw = new Tween(anisoMesh.rotation)
     .to({ y: 0 })
@@ -1090,7 +1142,6 @@ async function setupModels() {
           y: MathUtils.randFloatSpread(Math.PI / 4),
         }
       }
-      console.log(eyeBallTw._repeat)
     })
     .repeat(3)
     .duration(500)
@@ -1159,7 +1210,6 @@ async function setupModels() {
 
   ring1Mesh.children.forEach((mesh) => {
     mesh.onRaycast = () => {
-      console.log("ring1Mesh")
       ring1Tween.stop()
       ring1Reset.startFromCurrentValues()
     }
@@ -1167,7 +1217,6 @@ async function setupModels() {
 
   ring2Mesh.children.forEach((mesh) => {
     mesh.onRaycast = () => {
-      console.log("ring2Mesh")
       ring2Tween.stop()
       ring2Reset.startFromCurrentValues()
     }
@@ -1241,13 +1290,6 @@ async function setupModels() {
         })
         .start()
     })
-
-  const floor = new Mesh(
-    new CircleGeometry(40, 64).rotateX(-Math.PI / 2),
-    new MeshStandardMaterial({ color: 0x0000ff })
-  )
-  floor.receiveShadow = true
-  mainObjects.add(floor)
 
   model.position.set(0, 0, 0) // for compile to work correctly
 }

@@ -16,7 +16,7 @@ export const CameraShake = (
     rollFrequency: 0.1,
   }
 ) => {
-  console.log({ prop })
+  // console.log({ prop })
   let initialRotation = camera.rotation.clone()
   const yawNoise = new SimplexNoise()
   const pitchNoise = new SimplexNoise()
