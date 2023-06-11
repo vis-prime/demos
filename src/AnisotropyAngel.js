@@ -80,7 +80,6 @@ let enableRaycast = false
 const raycaster = new Raycaster()
 const intersects = [] //raycast
 const chromaticAberrationOffset = new Vector2(0.01, 0.01)
-let sceneGui
 /**
  * @type {BG_ENV}
  */
@@ -144,7 +143,6 @@ export default async function AnisotropyAngel(mainGui) {
   clock = new Clock()
   gui = mainGui
   gui.close()
-  sceneGui = gui.addFolder("Scene")
   stats = new Stats()
   app.appendChild(stats.dom)
   // renderer
@@ -291,6 +289,7 @@ function createDivs() {
   textDiv.style.textShadow = "8px 8px 8px grey"
   textDiv.style.fontSize = "10vw" // Use viewport units instead of pixels
   textDiv.style.fontFamily = "Arial, sans-serif"
+  textDiv.style.fontFamily = "Courier New , monospace"
   textDiv.style.width = "100%"
   document.body.appendChild(textDiv)
 
@@ -303,7 +302,7 @@ function createDivs() {
     // Uncomment the line below if you want to stop after cycling through all texts
     if (button.parentNode) {
       clearInterval(interval)
-      textDiv.textContent = "B̵͍̝̮͈̓͗̈́̏̌̌ͅȩ̴̫͙̪̟̻̀̋̈́̏̄̅̃̎̈́͘͝ ̵̡̜̰̳̬͖͛̄̒̑n̷͍̭̫̝̰̣̙̫̣͋̐͆̄̇̋̽̈͋̾ǫ̴̨̢̣̙̯̦̦̭͇̥̝͎̼̀͝t̷͎͕̹̪̪͚̣̭͖̗̘̱̃̾ ̴͖̰͕͙̙̗̦͔̫̗̎͑̾̆̉͑̿̅̄́̕A̵̢̧̙̳̭̳͓͋̾̚ͅf̵̞̹̞̆́̋̈́̐̚̚͝r̸̫͔̬̦̞̓̊́̿̊̋́̋̇̑̕ä̸̮̖̏̓͋̄̃́̈́͊̓̃͑͝͝i̸̡͕̮͓̪̼̺̹̖̱͕͐̒̑̆͘ͅḍ̸̢̟̺̘̮̙̻̮̬̘͠"
+      textDiv.textContent = `B̶̓e̸̡̓̄ N̴̦͉̓ö̶͓́̃t̴̕ Å̶͓̼͛f̵̹͑r̶̚a̶̪̾i̷d`
     }
   }
 
@@ -463,7 +462,6 @@ async function setupBackground() {
   bg_env.sunEnabled = true
   bg_env.shadowFloorEnabled = true
   bg_env.setEnvType("HDRI")
-  // bg_env.addGui(sceneGui)
   bg_env.preset = HDRI_LIST.round_platform
   bg_env.setBGType("None")
   await bg_env.updateAll()
@@ -877,6 +875,7 @@ const setupParticles = () => {
     .to({
       y: Math.PI * 4,
     })
+    .repeat(1000)
     .duration(1200000)
 
   particleTween.start()
