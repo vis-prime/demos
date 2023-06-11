@@ -471,6 +471,9 @@ function setupEffects() {
   composer.addPass(allPasses.n8ao)
   updateEffects(enabledPasses, allPasses.n8ao, true)
   allPasses.n8ao.configuration.color.set(0x342e84).convertLinearToSRGB()
+  const n8Params = {
+    renderMode: "combined",
+  }
   allGui.n8ao = (aoFol) => {
     aoFol.addColor(allPasses.n8ao.configuration, "color")
     aoFol.add(allPasses.n8ao.configuration, "aoSamples", 1.0, 64.0, 1.0)
@@ -479,6 +482,10 @@ function setupEffects() {
     aoFol.add(allPasses.n8ao.configuration, "aoRadius", 0.01, 10.0, 0.01)
     aoFol.add(allPasses.n8ao.configuration, "distanceFalloff", 0.0, 10.0, 0.01)
     aoFol.add(allPasses.n8ao.configuration, "intensity", 0.0, 20.0, 0.01)
+    aoFol.add(allPasses.n8ao.configuration, "halfRes")
+    aoFol.add(n8Params, "renderMode", ["Combined", "AO", "No AO", "Split", "Split AO"]).onChange((v) => {
+      allPasses.n8ao.configuration.renderMode = ["Combined", "AO", "No AO", "Split", "Split AO"].indexOf(v)
+    })
   }
 
   allEffects.bloom = new BloomEffect({
@@ -487,8 +494,9 @@ function setupEffects() {
     resolutionScale: 0.5,
   })
   allGui.bloom = (folder) => {
-    folder.open()
+    folder.add(allEffects.bloom.luminanceMaterial, "threshold", 0, 2)
     folder.add(allEffects.bloom, "intensity", 1.0, 64.0, 1.0)
+    folder.add(allEffects.bloom.resolution, "scale", 0.01, 1).name("resolutionScale")
   }
 
   allEffects.chromaticAberration = new ChromaticAberrationEffect({
@@ -497,7 +505,7 @@ function setupEffects() {
     radialModulation: true,
   })
   allGui.chromaticAberration = (folder) => {
-    folder.open()
+    folder.add(allEffects.chromaticAberration, "radialModulation")
     folder.add(allEffects.chromaticAberration, "modulationOffset", 0, 1)
     folder.add(allEffects.chromaticAberration.offset, "x", 0, 1)
     folder.add(allEffects.chromaticAberration.offset, "y", 0, 1)
@@ -511,24 +519,31 @@ function setupEffects() {
 
   allEffects.depthOfField.target = focusPoint
   allGui.depthOfField = (folder) => {
-    folder.open()
     folder.add(allEffects.depthOfField, "bokehScale", 1, 20)
-    folder.add(allEffects.depthOfField.cocMaterial, "worldFocusRange", 5, 30)
-    folder.add(allEffects.depthOfField.resolution, "scale", 0.01, 1)
-    folder.add(focusPoint, "x", -5, 5)
-    folder.add(focusPoint, "y", -5, 5)
-    folder.add(focusPoint, "z", -5, 5)
+    folder.add(allEffects.depthOfField.cocMaterial, "worldFocusRange", 5, 120)
+    folder.add(allEffects.depthOfField.resolution, "scale", 0.01, 1).name("resolutionScale")
   }
 
   allEffects.vignette = new VignetteEffect({ eskil: true })
+  allGui.vignette = (folder) => {
+    folder.add(allEffects.vignette, "eskil")
+    folder.add(allEffects.vignette, "darkness", 0, 1)
+    folder.add(allEffects.vignette, "offset", 0, 1)
+  }
   allEffects.tiltShift = new TiltShiftEffect()
+  allGui.tiltShift = (folder) => {
+    folder.add(allEffects.tiltShift, "offset", 0, 1)
+  }
 
   // allEffects.smaa = new SMAAEffect()
   // allEffects.fxaa = new FXAAEffect()
 
   const effectsFol = gui.addFolder("POST PROCESSING")
   effectsFol.open()
-  const createToggle = (gui, folder, enabledItems, name, effect) => {
+  const toggleFolder = effectsFol.addFolder("toggle")
+  const settingsFolder = effectsFol.addFolder("settings")
+
+  const createToggle = (enabledItems, name, effect) => {
     const guiToggle = {
       enabled: composer.passes.includes(effect),
       editFolder: null,
@@ -540,27 +555,34 @@ function setupEffects() {
         guiToggle.editFolder = null
       }
     }
+    const create = () => {
+      guiToggle.editFolder = settingsFolder.addFolder(name)
+      if (allGui[name]) allGui[name](guiToggle.editFolder)
+    }
 
-    gui
+    toggleFolder
       .add(guiToggle, "enabled")
       .name(name)
       .onChange((v) => {
         updateEffects(enabledItems, effect, v)
         if (v) {
-          guiToggle.editFolder = folder.addFolder(name)
-          if (allGui[name]) allGui[name](guiToggle.editFolder)
+          create()
         } else {
           destroy()
         }
       })
+
+    if (guiToggle.enabled) {
+      create()
+    }
   }
 
   for (const [name, pass] of Object.entries(allPasses)) {
-    if (pass) createToggle(effectsFol, effectsFol, enabledPasses, name, pass)
+    if (pass) createToggle(enabledPasses, name, pass)
   }
 
   for (const [name, effect] of Object.entries(allEffects)) {
-    if (effect) createToggle(effectsFol, effectsFol, enabledEffects, name, effect)
+    if (effect) createToggle(enabledEffects, name, effect)
   }
 }
 

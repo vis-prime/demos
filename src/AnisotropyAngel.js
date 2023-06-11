@@ -550,7 +550,6 @@ function setupEffects() {
   allPasses.n8ao.configuration.color.set(0x342e84).convertLinearToSRGB()
   allPasses.n8ao.configuration.intensity = 20
   allPasses.n8ao.setQualityMode("Medium")
-  allPasses.n8ao.configuration.halfResolution = true
   const n8Params = {
     renderMode: "combined",
   }
@@ -562,7 +561,7 @@ function setupEffects() {
     aoFol.add(allPasses.n8ao.configuration, "aoRadius", 0.01, 10.0, 0.01)
     aoFol.add(allPasses.n8ao.configuration, "distanceFalloff", 0.0, 10.0, 0.01)
     aoFol.add(allPasses.n8ao.configuration, "intensity", 0.0, 20.0, 0.01)
-    aoFol.add(allPasses.n8ao.configuration, "halfResolution")
+    aoFol.add(allPasses.n8ao.configuration, "halfRes")
     aoFol.add(n8Params, "renderMode", ["Combined", "AO", "No AO", "Split", "Split AO"]).onChange((v) => {
       allPasses.n8ao.configuration.renderMode = ["Combined", "AO", "No AO", "Split", "Split AO"].indexOf(v)
     })
