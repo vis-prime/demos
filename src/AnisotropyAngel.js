@@ -36,10 +36,7 @@ import {
   AudioListener,
   Audio as THREEAudio,
   AudioAnalyser,
-  DirectionalLightHelper,
   Euler,
-  Quaternion,
-  AxesHelper,
 } from "three"
 
 // Model and Env
@@ -79,6 +76,7 @@ let stats,
 
 const mainObjects = new Group()
 
+let enableRaycast = false
 const raycaster = new Raycaster()
 const intersects = [] //raycast
 const chromaticAberrationOffset = new Vector2(0.01, 0.01)
@@ -118,15 +116,13 @@ const allGui = {
   godRays: () => {},
 }
 
-const enabledEffects = []
-const enabledPasses = []
 const focusPoint = new Vector3()
 const dummyObj = {
   toFocus: new Vector3(),
   fromFocus: new Vector3(),
   val: 0,
 }
-const focusTween = new Tween(dummyObj).to({ val: 1 }, 1e6)
+let focusTween
 let clock, mixer
 
 const maxTarget = new Vector3(0, 2, 0)
@@ -139,13 +135,15 @@ let angelStartTw
 let cameraShake, shakeTween
 let wingRoot
 let basicOverrideMaterial
-const focusHelper = new AxesHelper()
+let instancedParticles, particleTween
 
 export default async function AnisotropyAngel(mainGui) {
+  focusTween = new Tween(dummyObj).to({ val: 1 }, 1e6)
   createDivs()
   basicOverrideMaterial = new MeshBasicMaterial()
   clock = new Clock()
   gui = mainGui
+  gui.close()
   sceneGui = gui.addFolder("Scene")
   stats = new Stats()
   app.appendChild(stats.dom)
@@ -171,7 +169,6 @@ export default async function AnisotropyAngel(mainGui) {
   // custom vector to perform focus
   scene.focus = focusPoint
 
-  scene.add(focusHelper)
   scene.fog = new Fog(0xff0000, 1, 100)
 
   // controls
@@ -224,10 +221,9 @@ export default async function AnisotropyAngel(mainGui) {
   })
 
   setupEffects()
-
-  await Promise.all([setupBackground(), setupModels(), loadAudioBuffer()])
   setupParticles()
   setupCity()
+  await Promise.all([setupBackground(), setupModels(), loadAudioBuffer()])
 
   document.body.appendChild(divs.button)
 
@@ -259,11 +255,9 @@ export default async function AnisotropyAngel(mainGui) {
 
   focusTween.onUpdate(() => {
     focusPoint.lerp(dummyObj.toFocus, 0.1)
-    focusHelper.position.copy(focusPoint)
   })
 
-  // animate()
-
+  // compile
   renderer.compile(scene, camera)
   render()
 }
@@ -412,6 +406,9 @@ function animate() {
 }
 
 function raycast() {
+  if (!enableRaycast) {
+    return
+  }
   // update the picking ray with the camera and pointer position
   raycaster.setFromCamera(pointer, camera)
 
@@ -466,7 +463,7 @@ async function setupBackground() {
   bg_env.sunEnabled = true
   bg_env.shadowFloorEnabled = true
   bg_env.setEnvType("HDRI")
-  bg_env.addGui(sceneGui)
+  // bg_env.addGui(sceneGui)
   bg_env.preset = HDRI_LIST.round_platform
   bg_env.setBGType("None")
   await bg_env.updateAll()
@@ -513,10 +510,10 @@ async function setupBackground() {
   sunLight.shadow.blurSamples = 6
   sunLight.shadow.bias = -0.0005
   scene.add(sunLight)
-  // const helper = new DirectionalLightHelper(sunLight)
-  // scene.add(helper)
 
-  gui.add(sunLight, "intensity", 0.1, 20)
+  const lightFolder = gui.addFolder("Light")
+  lightFolder.add(sunLight, "intensity", 0.1, 20)
+  lightFolder.addColor(sunLight, "color")
 
   const twObj = {
     val: 0,
@@ -542,13 +539,9 @@ async function setupBackground() {
       // Set the new position of the light
       sunLight.position.x = x
       sunLight.position.z = z
-
-      // helper.update()
     })
     .start()
 }
-
-let instancedParticles, particleTween
 
 function setupEffects() {
   composer = new EffectComposer(renderer)
@@ -571,20 +564,22 @@ function setupEffects() {
     aoFol.add(allPasses.n8ao.configuration, "aoRadius", 0.01, 10.0, 0.01)
     aoFol.add(allPasses.n8ao.configuration, "distanceFalloff", 0.0, 10.0, 0.01)
     aoFol.add(allPasses.n8ao.configuration, "intensity", 0.0, 20.0, 0.01)
-
+    aoFol.add(allPasses.n8ao.configuration, "halfResolution")
     aoFol.add(n8Params, "renderMode", ["Combined", "AO", "No AO", "Split", "Split AO"]).onChange((v) => {
       allPasses.n8ao.configuration.renderMode = ["Combined", "AO", "No AO", "Split", "Split AO"].indexOf(v)
     })
   }
 
   allEffects.bloom = new BloomEffect({
+    luminanceThreshold: 1,
     mipmapBlur: true,
     intensity: 15,
     resolutionScale: 0.3,
   })
   allGui.bloom = (folder) => {
-    folder.open()
+    folder.add(allEffects.bloom.luminanceMaterial, "threshold", 0, 2)
     folder.add(allEffects.bloom, "intensity", 1.0, 64.0, 1.0)
+    folder.add(allEffects.bloom.resolution, "scale", 0.01, 1).name("resolutionScale")
   }
 
   allEffects.chromaticAberration = new ChromaticAberrationEffect({
@@ -593,7 +588,7 @@ function setupEffects() {
     radialModulation: true,
   })
   allGui.chromaticAberration = (folder) => {
-    folder.open()
+    folder.add(allEffects.chromaticAberration, "radialModulation")
     folder.add(allEffects.chromaticAberration, "modulationOffset", 0, 1)
     folder.add(allEffects.chromaticAberration.offset, "x", 0, 1)
     folder.add(allEffects.chromaticAberration.offset, "y", 0, 1)
@@ -607,16 +602,17 @@ function setupEffects() {
 
   allEffects.depthOfField.target = focusPoint
   allGui.depthOfField = (folder) => {
-    folder.open()
     folder.add(allEffects.depthOfField, "bokehScale", 1, 20)
-    folder.add(allEffects.depthOfField.cocMaterial, "worldFocusRange", 5, 60)
-    folder.add(allEffects.depthOfField.resolution, "scale", 0.01, 1)
-    folder.add(focusPoint, "x", -25, 25).listen()
-    folder.add(focusPoint, "y", -25, 25).listen()
-    folder.add(focusPoint, "z", -25, 25).listen()
+    folder.add(allEffects.depthOfField.cocMaterial, "worldFocusRange", 5, 120)
+    folder.add(allEffects.depthOfField.resolution, "scale", 0.01, 1).name("resolutionScale")
   }
 
   allEffects.vignette = new VignetteEffect({ eskil: true, darkness: 0.5 })
+  allGui.vignette = (folder) => {
+    folder.add(allEffects.vignette, "eskil")
+    folder.add(allEffects.vignette, "darkness", 0, 1)
+    folder.add(allEffects.vignette, "offset", 0, 1)
+  }
 
   const sun = new Mesh(
     new IcosahedronGeometry(1, 3),
@@ -636,7 +632,7 @@ function setupEffects() {
     kernelSize: KernelSize.SMALL,
     density: 0.45,
     decay: 0.9,
-    weight: 0.15,
+    weight: 0.35,
     exposure: 0.54,
     samples: 32,
     resolutionScale: 0.3,
@@ -646,7 +642,7 @@ function setupEffects() {
     const effect = allEffects.godRays
     const godRaysMaterial = effect.godRaysMaterial
     const folder = gui
-    folder.add(effect.resolution, "scale", 0.1, 1, 0.05)
+    folder.add(effect.resolution, "scale", 0.1, 1, 0.05).name("resolutionScale")
     folder.add(effect, "blur")
     folder.add(effect.blurPass, "kernelSize", KernelSize)
     folder.add(godRaysMaterial, "density", 0, 1, 0.01)
@@ -656,27 +652,6 @@ function setupEffects() {
     folder.add(godRaysMaterial, "maxIntensity", 0, 1, 0.01)
     folder.add(godRaysMaterial, "samples", 16, 128, 1)
     folder.addColor(sun.material, "color").onChange((e) => sun.material.color.convertSRGBToLinear())
-    folder.add(effect.blendMode.opacity, "value", 0, 1, 0.01)
-    folder
-      .add(sun.position, "y", 0, 50)
-      .name("sun pos y")
-      .onChange(() => {
-        sun.updateMatrix()
-      })
-    folder
-      .add(sun.position, "z", -100, 0)
-      .name("sun pos z")
-      .onChange(() => {
-        sun.updateMatrix()
-      })
-
-    folder
-      .add(sun.scale, "y", 0, 60)
-      .name("sun scale")
-      .onChange((v) => {
-        sun.scale.setScalar(v)
-        sun.updateMatrix()
-      })
   }
 
   composer.addPass(renderPass)
@@ -704,83 +679,18 @@ function setupEffects() {
 
   const effectsFol = gui.addFolder("POST PROCESSING")
   effectsFol.open()
-  const createToggle = (gui, folder, enabledItems, name, effect) => {
-    const guiToggle = {
-      enabled: true,
-      editFolder: null,
-    }
-
-    const destroy = () => {
-      if (guiToggle.editFolder) {
-        guiToggle.editFolder.destroy()
-        guiToggle.editFolder = null
-      }
-    }
-
-    const create = () => {
-      guiToggle.editFolder = folder.addFolder(name)
-      if (allGui[name]) allGui[name](guiToggle.editFolder)
-    }
-
-    // gui
-    //   .add(guiToggle, "enabled")
-    //   .name(name)
-    //   .onChange((v) => {
-    //     updateEffects(enabledItems, effect, v)
-    //     if (v) {
-    //       create()
-    //     } else {
-    //       destroy()
-    //     }
-    //   })
-
-    if (guiToggle.enabled) create()
+  const createToggle = (folder, name) => {
+    const editFolder = folder.addFolder(name)
+    if (allGui[name]) allGui[name](editFolder)
   }
 
   for (const [name, pass] of Object.entries(allPasses)) {
-    if (pass) createToggle(effectsFol, effectsFol, enabledPasses, name, pass)
+    if (pass) createToggle(effectsFol, name)
   }
 
   for (const [name, effect] of Object.entries(allEffects)) {
-    if (effect) createToggle(effectsFol, effectsFol, enabledEffects, name, effect)
+    if (effect) createToggle(effectsFol, name)
   }
-}
-
-/**
- * Edit effect/pass
- * @param {Array} array
- * @param {Effect|Pass} item
- */
-function updateEffects(array, item, add = true) {
-  if (add) {
-    // Item doesn't exist in the array, so add it
-    array.push(item)
-  } else {
-    const index = array.indexOf(item)
-    // Item exists in the array, so remove it
-    if (index !== -1) {
-      array.splice(index, 1)
-    }
-  }
-  const oldPasses = [...composer.passes]
-  composer.removeAllPasses()
-
-  oldPasses.forEach((pass) => pass.dispose())
-
-  composer.addPass(renderPass)
-  if (enabledPasses.includes(allPasses.n8ao)) {
-    composer.addPass(allPasses.n8ao, 1)
-  }
-
-  if (enabledEffects.includes(allEffects.depthOfField)) {
-    const index = enabledEffects.indexOf(allEffects.depthOfField)
-    if (index > 0) {
-      enabledEffects.splice(index, 1)
-      enabledEffects.unshift(allEffects.depthOfField)
-    }
-  }
-
-  if (enabledEffects.length) composer.addPass(new EffectPass(camera, ...enabledEffects))
 }
 
 function setupCity() {
@@ -900,8 +810,6 @@ function setupCity() {
   floor.receiveShadow = true
   mainObjects.add(floor)
   const hsl = {}
-  const colorA = new Color()
-  const colorB = new Color()
   const shiftHue = () => {
     floor.material.color.getHSL(hsl)
     hsl.h += 0.1 % 1
@@ -938,8 +846,7 @@ const setupParticles = () => {
   const spreadAngle = Math.PI * 2 // Adjust the spread angle
   for (let index = 0; index < instancedParticles.count; index++) {
     matrix.identity()
-    randomScale.setScalar(MathUtils.randFloat(1, 3))
-    matrix.scale(randomScale)
+
     matrix.makeRotationFromEuler(
       euler.set(
         MathUtils.randFloatSpread(2 * Math.PI),
@@ -955,11 +862,16 @@ const setupParticles = () => {
 
     matrix.setPosition(xPos, MathUtils.randFloat(0, radius / 2), zPos)
 
+    randomScale.set(MathUtils.randFloat(1, 3), MathUtils.randFloat(1, 3), MathUtils.randFloat(1, 3))
+    matrix.scale(randomScale)
+
     randColor.setHSL(MathUtils.randFloat(0, 1), 1, 0.1)
-    randColor.multiplyScalar(10)
+    randColor.multiplyScalar(100)
     instancedParticles.setColorAt(index, randColor)
     instancedParticles.setMatrixAt(index, matrix)
   }
+
+  instancedParticles.instanceMatrix.needsUpdate = true
 
   particleTween = new Tween(instancedParticles.rotation)
     .to({
@@ -1128,7 +1040,6 @@ async function setupModels() {
       chromaticAberrationOffset.y = MathUtils.lerp(startCA, endCA, colObj.val)
       allEffects.chromaticAberration.modulationOffset = MathUtils.lerp(0.5, 0, colObj.val)
     })
-  gui.addColor(anisoMesh.material, "color").listen()
 
   const eyeBallTw = new Tween(anisoMesh.rotation)
     .to({ y: 0 })
@@ -1245,13 +1156,34 @@ async function setupModels() {
     eyelidBTween.startFromCurrentValues()
 
     anisoRepeatTw.startFromCurrentValues()
+
+    eyeLidColorTw.stop()
+    eyeLidColorTw.start()
   }
+  const hsl = {}
+
+  const eyeLidObj = { val: 0 }
+  const eyeLidColorTw = new Tween(eyeLidObj).to({ val: 1 }, 1000).easing(Easing.Quadratic.Out)
+  const startCol = new Color()
+  const endColor = new Color()
+  eyeLidColorTw
+    .onStart(() => {
+      startCol.copy(eyelidBot.material.color)
+
+      eyelidBot.material.color.getHSL(hsl)
+      hsl.h += 0.2 % 1
+      hsl.l = 0.5
+      endColor.setHSL(hsl.h, hsl.s, hsl.l)
+    })
+    .onUpdate(() => {
+      eyelidBot.material.color.lerpColors(startCol, endColor, eyeLidObj.val)
+    })
 
   eyelidTop.onRaycast = closeEyes
   eyelidBot.onRaycast = closeEyes
 
   model.scale.setScalar(0.001)
-  model.position.set(0, 15, -100)
+  model.position.set(0, 15, -30)
 
   mainObjects.add(model)
 
@@ -1287,12 +1219,10 @@ async function setupModels() {
         .easing(Easing.Back.Out)
         .onComplete(() => {
           eyeBallTw.startFromCurrentValues()
+          enableRaycast = true
         })
         .start()
     })
 
   model.position.set(0, 0, 0) // for compile to work correctly
 }
-
-// fog far react
-// start in cover mode
