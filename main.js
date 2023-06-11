@@ -34,7 +34,7 @@ const Demos = {
 
 let wip = []
 
-wip = [Demos.AnisotropyAngel, Demos.VehicleShowcase, Demos.CSGPlayground, Demos.MaterialSwap]
+wip = [Demos.VehicleShowcase, Demos.CSGPlayground, Demos.MaterialSwap]
 
 gui.add(params, "homeButton").name("🔙Home")
 
