@@ -258,6 +258,11 @@ export default async function AnisotropyAngel(mainGui) {
   // compile
   renderer.compile(scene, camera)
   render()
+
+  const fogGui = gui.addFolder("Fog")
+  fogGui.addColor(scene.fog, "color")
+  fogGui.add(scene.fog, "near", 0, 150)
+  fogGui.add(scene.fog, "far", 2, 150)
 }
 
 function createDivs() {
