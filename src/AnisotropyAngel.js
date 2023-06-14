@@ -405,8 +405,7 @@ function render() {
 }
 
 function animate() {
-  raf = requestAnimationFrame(animate)
-  render()
+  renderer.setAnimationLoop(render)
 }
 
 function raycast() {
@@ -805,10 +804,7 @@ function setupCity() {
     }
   }, 80)
 
-  const floor = new Mesh(
-    new CircleGeometry(40, 64).rotateX(-Math.PI / 2),
-    new MeshStandardMaterial({ color: 0x0000ff })
-  )
+  const floor = new Mesh(new CircleGeometry(40, 64).rotateX(-Math.PI / 2), instancedMesh.material)
   floor.receiveShadow = true
   mainObjects.add(floor)
   const hsl = {}
@@ -830,6 +826,9 @@ function setupCity() {
   floor.onRaycast = () => {
     refreshPosScale()
   }
+
+  const fol = gui.addFolder("Boxes")
+  fol.addColor(floor.material, "color")
 }
 
 const setupParticles = () => {
