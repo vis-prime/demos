@@ -8,6 +8,7 @@ import EffectsPlayground from "./src/EffectsPlayground"
 import CSGPlayground from "./src/CSGPlayground"
 import VehicleShowcase from "./src/VehicleShowcase"
 import AnisotropyAngel from "./src/AnisotropyAngel"
+import CausticsDemo from "./src/CausticsDemo"
 
 const gui = new GUI({ title: "Demos: v" + version, closeFolders: true })
 if (window.innerWidth < window.innerHeight) {
@@ -30,11 +31,12 @@ const Demos = {
   CSGPlayground: CSGPlayground,
   VehicleShowcase: VehicleShowcase,
   AnisotropyAngel: AnisotropyAngel,
+  Caustics: CausticsDemo,
 }
 
 let wip = []
 
-wip = [Demos.VehicleShowcase, Demos.CSGPlayground, Demos.MaterialSwap]
+wip = [Demos.VehicleShowcase, Demos.Caustics, Demos.CSGPlayground, Demos.MaterialSwap]
 
 gui.add(params, "homeButton").name("🔙Home")
 
