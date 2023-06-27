@@ -56,6 +56,11 @@ export const MODEL_LIST = {
     url: "./models/aniso_angel_2k_comp.glb",
     attribution: `Parts used from: "Angel Wings" (https://skfb.ly/6uVyU) by Boooooop is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).`,
   },
+  garage: {
+    name: "Garage",
+    url: "./models/garage_2k_comp.glb",
+    attribution: `"Garage/Showroom Vr ready" (https://skfb.ly/o9V8Y) by matteo.pascale is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).`,
+  },
 }
 
 /**
