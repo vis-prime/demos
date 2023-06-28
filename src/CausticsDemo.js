@@ -126,10 +126,13 @@ export default async function CausticsDemo(mainGui) {
   bg_env.sunEnabled = true
   bg_env.shadowFloorEnabled = true
   bg_env.setEnvType("HDRI")
+  bg_env.setBGType("Color")
+  bg_env.bgColor.set(0x111111)
   bg_env.addGui(sceneGui)
   sceneGui.add(camera, "fov", 1, 179).onChange(() => camera.updateProjectionMatrix())
   curveHandler = new CurveHandler(scene, camera, controls, renderer)
-  // curveHandler.addGui(gui)
+  curveHandler.playBackTween.duration(2000)
+  curveHandler.addGui(gui)
   await setupModels()
 
   animate()
@@ -289,6 +292,7 @@ async function setupModels() {
         // controls.target.toArray(IntroCurves[data.name][0].target)
         // IntroCurves[data.name][0].fov = camera.fov
         curveHandler.loadPreset(IntroCurves[data.name])
+
         curveHandler.play()
       } else {
         fitModelInViewport(mainObjects)
@@ -476,27 +480,10 @@ const IntroCurves = {
     {
       position: [3.3071321443089925, 1.388944390019785, 3.307132144799106],
       target: [-1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8],
-      fov: 50,
-      focus: [0, 0, 0],
-    },
-    {
-      position: [-1.7303892445874622, 1.3344887086602903, 2.200999081476231],
-      target: [-1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8],
       fov: 90,
       focus: [0, 0, 0],
     },
-    {
-      position: [-1.6896684397735617, 3.5239462707277447, -2.79920023168043],
-      target: [-1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8],
-      fov: 40,
-      focus: [0, 0, 0],
-    },
-    {
-      position: [2.4755038102622025, 1.761564273787293, -2.545411150778058],
-      target: [-1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8],
-      fov: 20,
-      focus: [0, 0, 0],
-    },
+
     {
       position: [0.5324308158242546, 1.3889240952517157, 4.527657651483493],
       target: [-1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8],
