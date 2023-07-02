@@ -362,9 +362,9 @@ async function setupModels() {
         node.receiveShadow = true
         node.castShadow = true
       }
-      // if (node.material && !transmissionMaterials[node.material.uuid]) {
-      //   transmissionMaterials[node.material.uuid] = node.material
-      // }
+      if (node.material && !transmissionMaterials[node.material.uuid]) {
+        transmissionMaterials[node.material.uuid] = node.material
+      }
     })
 
     caustics.update()
