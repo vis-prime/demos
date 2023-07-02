@@ -21,6 +21,9 @@ import {
   Matrix4,
   TextureLoader,
   RepeatWrapping,
+  MeshPhysicalMaterial,
+  TorusKnotGeometry,
+  DirectionalLight,
 } from "three"
 
 // Model and Env
@@ -29,6 +32,7 @@ import { BG_ENV } from "../helpers/BG_ENV"
 import { Easing, Tween, update } from "@tweenjs/tween.js"
 import { HDRI_LIST } from "../hdri/HDRI_LIST"
 import { CurveHandler } from "../helpers/CurveHandler"
+import { Caustics } from "@pmndrs/vanilla"
 let stats,
   renderer,
   raf,
@@ -54,6 +58,11 @@ let bg_env
  * @type {CurveHandler}
  */
 let curveHandler
+
+/**
+ * @type {import("@pmndrs/vanilla").CausticsType}
+ */
+let caustics
 
 export default async function CausticsDemo(mainGui) {
   gui = mainGui
@@ -123,13 +132,16 @@ export default async function CausticsDemo(mainGui) {
 
   // sceneGui.add(transformControls, "mode", ["translate", "rotate", "scale"])
   bg_env = new BG_ENV(scene, renderer)
-  bg_env.sunEnabled = true
+  bg_env.sunEnabled = false
   bg_env.shadowFloorEnabled = true
   bg_env.setEnvType("HDRI")
   bg_env.setBGType("Color")
-  bg_env.bgColor.set(0x111111)
+  bg_env.bgColor.set("#0d111c")
+  bg_env.bgColor.convertLinearToSRGB()
   bg_env.addGui(sceneGui)
   sceneGui.add(camera, "fov", 1, 179).onChange(() => camera.updateProjectionMatrix())
+  sceneGui.add(renderer, "toneMappingExposure", 0, 1)
+
   curveHandler = new CurveHandler(scene, camera, controls, renderer)
   curveHandler.playBackTween.duration(2000)
   curveHandler.addGui(gui)
@@ -174,6 +186,7 @@ function render() {
   stats.update()
   update()
   controls.update()
+  // if (params.model) caustics.update()
   renderer.render(scene, camera)
 }
 
@@ -209,47 +222,84 @@ function onPointerMove(event) {
   pointer.y = -(event.clientY / window.innerHeight) * 2 + 1
 }
 
+const ModelData = {
+  Aztec: {
+    name: MODEL_LIST.aztec.name,
+    url: MODEL_LIST.aztec.url,
+    model: null,
+    hdri: HDRI_LIST.wide_street2,
+  },
+  Demon: {
+    name: MODEL_LIST.crowned_demon.name,
+    url: MODEL_LIST.crowned_demon.url,
+    model: null,
+    hdri: HDRI_LIST.wide_street1,
+  },
+  Cat: {
+    name: MODEL_LIST.cat.name,
+    url: MODEL_LIST.cat.url,
+    model: null,
+    hdri: HDRI_LIST.dancing_hall,
+  },
+  Mourner: {
+    name: MODEL_LIST.mourner.name,
+    url: MODEL_LIST.mourner.url,
+    model: null,
+    hdri: HDRI_LIST.round_platform,
+  },
+  Pots: {
+    name: MODEL_LIST.pots.name,
+    url: MODEL_LIST.pots.url,
+    model: null,
+    hdri: HDRI_LIST.round_platform,
+  },
+}
+const params = {
+  model: ModelData.Aztec,
+}
 async function setupModels() {
-  const ModelData = {
-    Aztec: {
-      name: MODEL_LIST.aztec.name,
-      url: MODEL_LIST.aztec.url,
-      model: null,
-      hdri: HDRI_LIST.wide_street2,
-    },
-    Demon: {
-      name: MODEL_LIST.crowned_demon.name,
-      url: MODEL_LIST.crowned_demon.url,
-      model: null,
-      hdri: HDRI_LIST.wide_street1,
-    },
-    Cat: {
-      name: MODEL_LIST.cat.name,
-      url: MODEL_LIST.cat.url,
-      model: null,
-      hdri: HDRI_LIST.dancing_hall,
-    },
-    Mourner: {
-      name: MODEL_LIST.mourner.name,
-      url: MODEL_LIST.mourner.url,
-      model: null,
-      hdri: HDRI_LIST.round_platform,
-    },
-    Pots: {
-      name: MODEL_LIST.pots.name,
-      url: MODEL_LIST.pots.url,
-      model: null,
-      hdri: HDRI_LIST.round_platform,
-    },
-  }
-
-  const params = {
-    model: ModelData.Aztec,
-  }
-
-  const folder = gui.addFolder("Thiccccc")
+  const folder = gui.addFolder("Caus")
   folder.open()
   let modelFolder
+
+  const sunLight = new DirectionalLight()
+  sunLight.name = "sun"
+  sunLight.castShadow = true
+  sunLight.shadow.camera.near = 0.1
+  sunLight.shadow.camera.far = 50
+  const size = 10
+  sunLight.shadow.camera.right = size
+  sunLight.shadow.camera.left = -size
+  sunLight.shadow.camera.top = size
+  sunLight.shadow.camera.bottom = -size
+  sunLight.shadow.mapSize.width = 1024
+  sunLight.shadow.mapSize.height = 1024
+  sunLight.shadow.radius = 1.95
+  sunLight.shadow.blurSamples = 6
+  sunLight.shadow.bias = -0.0005
+  sunLight.position.set(2, 3, 2)
+  scene.add(sunLight)
+  scene.add(transformControls)
+  transformControls.attach(sunLight)
+
+  transformControls.addEventListener("change", () => {
+    caustics.update()
+  })
+
+  caustics = Caustics(renderer, {
+    frames: Infinity,
+    resolution: 2048,
+    worldRadius: 0.0011,
+    ior: 1.01,
+    lightSource: sunLight,
+  })
+  caustics.helper.visible = false // start hidden
+  scene.add(caustics.group, caustics.helper)
+
+  caustics.group.position.y = 0.003 // to prevent z-fighting with groundProjectedSkybox
+  caustics.scene.add(mainObjects)
+
+  addCausticsGui(caustics)
 
   async function loadModel() {
     if (camera.aspect < 1) {
@@ -264,8 +314,8 @@ async function setupModels() {
         data.model = gltf.scene
       })
     }
+
     await blackout()
-    mainObjects.clear()
 
     let bgEnvPromise
 
@@ -274,8 +324,13 @@ async function setupModels() {
       bgEnvPromise = bg_env.updateAll()
     }
 
-    const texloader = new TextureLoader()
-    const anisoTexPromise = texloader.loadAsync("./textures/aniso.png")
+    const texLoader = new TextureLoader()
+    const anisoTexPromise = texLoader.loadAsync("./textures/aniso.png")
+    Object.values(ModelData).forEach((dat) => {
+      if (dat.model && dat.model.parent) {
+        dat.model.removeFromParent()
+      }
+    })
 
     const [anisoTexture] = await Promise.all([anisoTexPromise, modelPromise, bgEnvPromise])
     anisoTexture.wrapS = anisoTexture.wrapT = RepeatWrapping
@@ -303,6 +358,7 @@ async function setupModels() {
       }
 
       exposureEntryTween.start()
+      caustics.update()
     }, 100)
 
     if (modelFolder) modelFolder.destroy()
@@ -314,9 +370,9 @@ async function setupModels() {
         node.receiveShadow = true
         node.castShadow = true
       }
-      if (node.material && !transmissionMaterials[node.material.uuid]) {
-        transmissionMaterials[node.material.uuid] = node.material
-      }
+      // if (node.material && !transmissionMaterials[node.material.uuid]) {
+      //   transmissionMaterials[node.material.uuid] = node.material
+      // }
     })
 
     const test = {
@@ -326,92 +382,92 @@ async function setupModels() {
     }
     modelFolder.add(test, "fit")
 
-    for (const mat of Object.values(transmissionMaterials)) {
-      const mFol = modelFolder.addFolder(mat.name)
+    // for (const mat of Object.values(transmissionMaterials)) {
+    //   const mFol = modelFolder.addFolder(mat.name)
 
-      const texParams = {}
-      const texDict = {}
-      for (const key of Object.keys(mat)) {
-        if (mat[key]?.isTexture) {
-          texDict[key] = mat[key]
-          texParams[key] = true
-        }
-      }
+    //   const texParams = {}
+    //   const texDict = {}
+    //   for (const key of Object.keys(mat)) {
+    //     if (mat[key]?.isTexture) {
+    //       texDict[key] = mat[key]
+    //       texParams[key] = true
+    //     }
+    //   }
 
-      function makeTextureToggleButton(gui, channel) {
-        if (texParams[channel])
-          gui.add(texParams, channel).onChange((v) => {
-            mat[channel] = v ? texDict[channel] : null
-            mat.needsUpdate = true
-            console.log(channel, v)
-          })
-      }
+    //   function makeTextureToggleButton(gui, channel) {
+    //     if (texParams[channel])
+    //       gui.add(texParams, channel).onChange((v) => {
+    //         mat[channel] = v ? texDict[channel] : null
+    //         mat.needsUpdate = true
+    //         console.log(channel, v)
+    //       })
+    //   }
 
-      console.log({ texParams, texDict })
-      console.log("mat", mat)
+    //   console.log({ texParams, texDict })
+    //   console.log("mat", mat)
 
-      mFol.addColor(mat, "color")
+    //   mFol.addColor(mat, "color")
 
-      mFol.add(mat, "roughness", 0, 1)
-      makeTextureToggleButton(mFol, "roughnessMap")
-      mFol.add(mat, "metalness", 0, 1)
-      makeTextureToggleButton(mFol, "metalnessMap")
+    //   mFol.add(mat, "roughness", 0, 1)
+    //   makeTextureToggleButton(mFol, "roughnessMap")
+    //   mFol.add(mat, "metalness", 0, 1)
+    //   makeTextureToggleButton(mFol, "metalnessMap")
 
-      mFol.add(mat, "aoMapIntensity", 0, 1)
-      makeTextureToggleButton(mFol, "aoMap")
-      makeTextureToggleButton(mFol, "normalMap")
+    //   mFol.add(mat, "aoMapIntensity", 0, 1)
+    //   makeTextureToggleButton(mFol, "aoMap")
+    //   makeTextureToggleButton(mFol, "normalMap")
 
-      if (mat.isMeshPhysicalMaterial) {
-        console.log({ mat })
-        mFol.open()
-        const tFol = mFol.addFolder("Transmission stuff")
-        tFol.add(mat, "transmission", 0, 1)
-        makeTextureToggleButton(tFol, "transmissionMap")
-        tFol.add(mat, "thickness", 0, 10)
-        makeTextureToggleButton(tFol, "thicknessMap")
-        tFol.addColor(mat, "attenuationColor")
-        tFol.add(mat, "attenuationDistance", 0, 1)
-        tFol.add(mat, "reflectivity", 0, 1)
-        const cFol = mFol.addFolder("Clearcoat stuff")
-        cFol.add(mat, "clearcoat", 0, 1)
-        cFol.add(mat, "clearcoatRoughness", 0, 1)
+    //   if (mat.isMeshPhysicalMaterial) {
+    //     console.log({ mat })
+    //     mFol.open()
+    //     const tFol = mFol.addFolder("Transmission stuff")
+    //     tFol.add(mat, "transmission", 0, 1)
+    //     makeTextureToggleButton(tFol, "transmissionMap")
+    //     tFol.add(mat, "thickness", 0, 10)
+    //     makeTextureToggleButton(tFol, "thicknessMap")
+    //     tFol.addColor(mat, "attenuationColor")
+    //     tFol.add(mat, "attenuationDistance", 0, 1)
+    //     tFol.add(mat, "reflectivity", 0, 1)
+    //     const cFol = mFol.addFolder("Clearcoat stuff")
+    //     cFol.add(mat, "clearcoat", 0, 1)
+    //     cFol.add(mat, "clearcoatRoughness", 0, 1)
 
-        const sFol = mFol.addFolder("Sheen stuff")
-        sFol.add(mat, "sheen", 0, 1)
-        sFol.add(mat, "sheenRoughness", 0, 1)
-        sFol.addColor(mat, "sheenColor")
+    //     const sFol = mFol.addFolder("Sheen stuff")
+    //     sFol.add(mat, "sheen", 0, 1)
+    //     sFol.add(mat, "sheenRoughness", 0, 1)
+    //     sFol.addColor(mat, "sheenColor")
 
-        const spFol = mFol.addFolder("Specular stuff")
-        spFol.add(mat, "specularIntensity", 0, 1)
-        spFol.addColor(mat, "specularColor")
+    //     const spFol = mFol.addFolder("Specular stuff")
+    //     spFol.add(mat, "specularIntensity", 0, 1)
+    //     spFol.addColor(mat, "specularColor")
 
-        const iFol = mFol.addFolder("Iridescence stuff")
-        iFol.add(mat, "iridescence", 0, 1)
-        iFol.add(mat, "iridescenceIOR", 0, 3)
-        // iFol.add(mat.iridescenceThicknessRange, "0")
-        iFol.add(mat.iridescenceThicknessRange, "1", 0, 1000).name("Range[1]")
+    //     const iFol = mFol.addFolder("Iridescence stuff")
+    //     iFol.add(mat, "iridescence", 0, 1)
+    //     iFol.add(mat, "iridescenceIOR", 0, 3)
+    //     // iFol.add(mat.iridescenceThicknessRange, "0")
+    //     iFol.add(mat.iridescenceThicknessRange, "1", 0, 1000).name("Range[1]")
 
-        const aFol = mFol.addFolder("Anisotropy stuff")
-        aFol.add(mat, "anisotropy", 0, 1)
-        aFol.add(mat, "anisotropyRotation", 0, 2 * Math.PI)
-        if (!mat.anisotropyMap) {
-          mat.anisotropyMap = anisoTexture
-          mat.needsUpdate = true
-          texDict.anisotropyMap = mat.anisotropyMap
-          texParams.anisotropyMap = true
-        }
-        const anisoTween = new Tween(mat).to({ anisotropyRotation: Math.PI * 10 }, 1e4)
-        aFol.add(anisoTween, "start")
-        aFol
-          .add(anisoTexture.repeat, "x", 1, 10)
-          .name("texture repeat")
-          .onChange((v) => {
-            anisoTexture.repeat.setScalar(v)
-          })
-        console.log("ANISO", mat.anisotropyMap)
-        makeTextureToggleButton(aFol, "anisotropyMap")
-      }
-    }
+    //     const aFol = mFol.addFolder("Anisotropy stuff")
+    //     aFol.add(mat, "anisotropy", 0, 1)
+    //     aFol.add(mat, "anisotropyRotation", 0, 2 * Math.PI)
+    //     if (!mat.anisotropyMap) {
+    //       mat.anisotropyMap = anisoTexture
+    //       mat.needsUpdate = true
+    //       texDict.anisotropyMap = mat.anisotropyMap
+    //       texParams.anisotropyMap = true
+    //     }
+    //     const anisoTween = new Tween(mat).to({ anisotropyRotation: Math.PI * 10 }, 1e4)
+    //     aFol.add(anisoTween, "start")
+    //     aFol
+    //       .add(anisoTexture.repeat, "x", 1, 10)
+    //       .name("texture repeat")
+    //       .onChange((v) => {
+    //         anisoTexture.repeat.setScalar(v)
+    //       })
+    //     console.log("ANISO", mat.anisotropyMap)
+    //     makeTextureToggleButton(aFol, "anisotropyMap")
+    //   }
+    // }
   }
 
   const exposureEntryTween = new Tween(renderer)
@@ -439,6 +495,37 @@ async function setupModels() {
 
   loadModel()
   folder.add(params, "model", ModelData).onChange(loadModel)
+}
+
+function addCausticsGui(caustics) {
+  const folder = gui.addFolder("Caustics")
+  folder.open()
+  folder.onChange(() => {
+    caustics.update()
+  })
+  folder.addColor(caustics.params, "color")
+  folder.add(caustics.params, "ior", 1 - 0.1, 1 + 0.1)
+  folder.add(caustics.params, "far", 0, 15).name("Caustics Far")
+
+  folder.add(caustics.helper, "visible").name("helper")
+
+  folder.add(caustics.params, "backside").onChange((v) => {
+    if (!v) {
+      // to prevent last frame from persisting
+      caustics.causticsTargetB.dispose()
+    }
+  })
+  folder.add(caustics.params, "backsideIOR", 0, Math.PI)
+  folder.add(caustics.params, "worldRadius", 0.001, 0.2)
+  folder.add(caustics.params, "intensity", 0, 0.1)
+  folder.add(caustics.params, "causticsOnly")
+
+  // params.lightSource can be vector3 or an object3d
+  if (caustics.params.lightSource instanceof Vector3) {
+    folder.add(caustics.params.lightSource, "x", -1, 1).name("lightSource X")
+    folder.add(caustics.params.lightSource, "y", 0.1, 1).name("lightSource Y")
+    folder.add(caustics.params.lightSource, "z", -1, 1).name("lightSource Z")
+  }
 }
 
 const bbox = new Box3()
@@ -499,12 +586,7 @@ const IntroCurves = {
       fov: 149,
       focus: [0, 0, 0],
     },
-    {
-      position: [-0.5886024054583632, 1.0464453715126747, 0.9545603661211215],
-      target: [0.027214537757725255, 0.34758996128067343, -0.02477326451882255],
-      fov: 61,
-      focus: [0, 0, 0],
-    },
+
     {
       position: [-1.9692589714105266, 0.8619989021216289, 11.444596023855219],
       target: [0.027214537757725255, 0.34758996128067343, -0.02477326451882255],
@@ -520,12 +602,7 @@ const IntroCurves = {
       fov: 4,
       focus: [0, 0, 0],
     },
-    {
-      position: [-14.426923092458672, 18.216836497152695, 13.817454932177636],
-      target: [0.012018844485282898, 0.2759282495826483, 0.07137548923492432],
-      fov: 40,
-      focus: [0, 0, 0],
-    },
+
     {
       position: [-0.6983884127570257, 0.4383567898365339, 0.7654766425209693],
       target: [0.012018844485282898, 0.2759282495826483, 0.07137548923492432],
@@ -541,24 +618,7 @@ const IntroCurves = {
       fov: 6,
       focus: [0, 0, 0],
     },
-    {
-      position: [-1.645632273331322, 3.5122442610375155, 3.0459753702566763],
-      target: [-0.06061215623379156, 0.5492753703728687, 0.3785231856811201],
-      fov: 6,
-      focus: [0, 0, 0],
-    },
-    {
-      position: [2.4011512714399372, 1.6907156315557115, 4.119389452751478],
-      target: [0.037644224795048455, 0.8720645238701967, 0.1402132755680808],
-      fov: 13,
-      focus: [0, 0, 0],
-    },
-    {
-      position: [-1.8346955593615164, 1.4382798598126947, 3.214418876318874],
-      target: [-0.054762280552704205, 1.0616501794008093, 0.06541819498620187],
-      fov: 10,
-      focus: [0, 0, 0],
-    },
+
     {
       position: [-0.08180431919328181, 0.9374016935960667, 1.7785125019886479],
       target: [-0.045845938474812026, 0.6331712508335492, 0.12170537744696061],

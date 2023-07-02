@@ -32,6 +32,7 @@ const rgbeLoader = new RGBELoader()
  * @property {string} Color
  * @property {string} Default
  * @property {string} GroundProjection
+ * @property {string} Gradient
  */
 
 /** @type {BgOptions} */
@@ -40,6 +41,7 @@ export const BG_OPTIONS = {
   Color: "color",
   Default: "default",
   GroundProjection: "gp",
+  Gradient: "grad",
 }
 
 /**
@@ -74,8 +76,8 @@ export class BG_ENV {
     this.bgColor = new Color("#ffffff")
 
     this.sunEnabled = false
-    this.sunPivot
-    this.sunLight
+    this.sunPivot = new Group()
+    this.sunLight = new DirectionalLight(0xffffeb, 1)
     this.sunLightIntensity = 1
     this.sunPos = new Vector3(1, 1, 1)
     this.sunColor = new Color("#ffffff")
@@ -102,9 +104,7 @@ export class BG_ENV {
   init() {
     // sun light
     if (this.sunEnabled && !this.sunPivot) {
-      this.sunPivot = new Group()
       this.sunPivot.name = "sun_pivot"
-      this.sunLight = new DirectionalLight(0xffffeb, 1)
       this.sunLight.name = "sun"
       this.sunLight.color = this.sunColor
       this.sunLight.castShadow = true
@@ -171,15 +171,18 @@ export class BG_ENV {
     folder.add(this, "environmentType", ENV_OPTIONS).onChange(() => {
       this.updateAll()
     })
-    folder.add(this, "backgroundType", BG_OPTIONS).onChange((v) => {
-      this.updateAll()
 
-      if (v === BG_OPTIONS.Color) {
+    const addBgGui = () => {
+      if (this.backgroundType === BG_OPTIONS.Color) {
         this.bgColorPicker = folder.addColor(this, "bgColor")
       } else {
         this.bgColorPicker?.destroy()
         this.bgColorPicker = null
       }
+    }
+    folder.add(this, "backgroundType", BG_OPTIONS).onChange((v) => {
+      this.updateAll()
+      addBgGui()
     })
 
     if (this.sunEnabled) {
@@ -187,7 +190,7 @@ export class BG_ENV {
         if (this.sunLight) this.sunLight.intensity = v
       })
     }
-
+    addBgGui()
     return folder
   }
 
@@ -228,6 +231,11 @@ export class BG_ENV {
 
         this.scene.add(this.groundProjectedSkybox)
       } else {
+        if (this.backgroundType === BG_OPTIONS.Gradient) {
+          if (!this.canvas) {
+            this.canvas = document.createElement("canvas")
+          }
+        }
         if (this.groundProjectedSkybox?.parent) {
           this.groundProjectedSkybox.removeFromParent()
         }
