@@ -8,7 +8,6 @@ import EffectsPlayground from "./src/EffectsPlayground"
 import CSGPlayground from "./src/CSGPlayground"
 import VehicleShowcase from "./src/VehicleShowcase"
 import AnisotropyAngel from "./src/AnisotropyAngel"
-import CausticsDemo from "./src/CausticsDemo"
 
 const gui = new GUI({ title: "Demos: v" + version, closeFolders: true })
 if (window.innerWidth < window.innerHeight) {

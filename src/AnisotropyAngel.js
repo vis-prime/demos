@@ -896,7 +896,7 @@ async function setupModels() {
 
   anisoTexture.wrapS = anisoTexture.wrapT = RepeatWrapping
 
-  let anisoMat
+  let anisoMat, wingMat
 
   /**
    * @type {AnimationAction}
@@ -927,12 +927,23 @@ async function setupModels() {
     }
 
     if (node.material && node.material.transparent) {
-      node.material.depthWrite = true
-      node.material.depthTest = true
-      // node.material.transparent = false
-      node.material.alphaTest = 0.5
+      wingMat = node.material
     }
   })
+  wingMat.depthWrite = true
+  wingMat.depthTest = true
+  wingMat.transparent = false
+  // wingMat.alphaTest = 0.5
+  wingMat.alphaHash = true
+  // gui.add(wingMat, "transparent").onChange((v) => {
+  //   wingMat.needsUpdate = true
+  // })
+
+  // gui.add(wingMat, "alphaHash").onChange((v) => {
+  //   wingMat.alphaHash = v
+
+  //   wingMat.needsUpdate = true
+  // })
 
   const anisoMesh = model.getObjectByName("eyeball")
   const eyelidBot = model.getObjectByName("eyelid_bottom")

@@ -30,6 +30,7 @@ import {
   WebGLCubeRenderTarget,
   IcosahedronGeometry,
   LightProbe,
+  HalfFloatType,
 } from "three"
 import { RapierPhysics } from "three/examples/jsm/physics/RapierPhysics"
 
@@ -146,8 +147,8 @@ export default async function VehicleShowcase(mainGui) {
   renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = VSMShadowMap
-  // renderer.outputColorSpace = SRGBColorSpace
-  // renderer.toneMapping = ACESFilmicToneMapping
+  renderer.outputColorSpace = SRGBColorSpace
+  renderer.toneMapping = ACESFilmicToneMapping
 
   app.appendChild(renderer.domElement)
 
@@ -587,7 +588,7 @@ const addParticles = () => {
 }
 
 function setupEffects() {
-  composer = new EffectComposer(renderer)
+  composer = new EffectComposer(renderer, { frameBufferType: HalfFloatType })
 
   const renderPass = new RenderPass(scene, camera)
 
