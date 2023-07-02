@@ -16,6 +16,7 @@ import {
   DirectionalLightHelper,
   MeshStandardMaterial,
   AxesHelper,
+  CanvasTexture,
 } from "three"
 import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader"
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader"
@@ -33,6 +34,7 @@ const rgbeLoader = new RGBELoader()
  * @property {string} Default
  * @property {string} GroundProjection
  * @property {string} Gradient
+ * @property {string} GradientProj
  */
 
 /** @type {BgOptions} */
@@ -42,6 +44,7 @@ export const BG_OPTIONS = {
   Default: "default",
   GroundProjection: "gp",
   Gradient: "grad",
+  GradientProj: "gradProj",
 }
 
 /**
@@ -93,6 +96,15 @@ export class BG_ENV {
 
     this.envCache = {}
     this.bgCache = {}
+
+    this.canvas
+    this.gradientTexture
+    this.gradientColors = [
+      "#FF4500", // Deep orange
+      "#FFD700", // Gold
+      "#FF1493", // Deep pink
+    ]
+    this.gradientStops = [0.3, 0.5, 0.7]
 
     /**
      * gui
@@ -173,11 +185,21 @@ export class BG_ENV {
     })
 
     const addBgGui = () => {
+      this.bgColorPicker?.destroy()
+      this.bgColorPicker = null
+
       if (this.backgroundType === BG_OPTIONS.Color) {
         this.bgColorPicker = folder.addColor(this, "bgColor")
-      } else {
-        this.bgColorPicker?.destroy()
-        this.bgColorPicker = null
+      } else if (this.backgroundType === BG_OPTIONS.Gradient || this.backgroundType === BG_OPTIONS.GradientProj) {
+        this.bgColorPicker = folder.addFolder("Gradient Colors")
+        this.gradientColors.forEach((i, index) => {
+          this.bgColorPicker.addColor(this.gradientColors, index).onChange(() => {
+            this.updateAll()
+          })
+          this.bgColorPicker.add(this.gradientStops, index, 0, 1).onChange(() => {
+            this.updateAll()
+          })
+        })
       }
     }
     folder.add(this, "backgroundType", BG_OPTIONS).onChange((v) => {
@@ -217,10 +239,7 @@ export class BG_ENV {
       if (this.backgroundType === BG_OPTIONS.GroundProjection && this.bgTexture) {
         this.scene.background = null
 
-        if (!this.groundProjectedSkybox) {
-          this.groundProjectedSkybox = new GroundProjectedSkybox(this.bgTexture)
-          this.groundProjectedSkybox.scale.setScalar(100)
-        }
+        this.initSkyBox()
 
         if (data.groundProj.radius) this.gpRadius = data.groundProj.radius
 
@@ -231,10 +250,32 @@ export class BG_ENV {
 
         this.scene.add(this.groundProjectedSkybox)
       } else {
-        if (this.backgroundType === BG_OPTIONS.Gradient) {
+        if (this.backgroundType === BG_OPTIONS.Gradient || this.backgroundType === BG_OPTIONS.GradientProj) {
           if (!this.canvas) {
             this.canvas = document.createElement("canvas")
           }
+          // Create a canvas element
+          const canvas = this.canvas
+          canvas.width = 256
+          canvas.height = 128
+          // Get the 2D rendering context
+          const ctx = canvas.getContext("2d")
+
+          // Define the gradient
+          const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height)
+          gradient.addColorStop(this.gradientStops[0], this.gradientColors[0]) // Deep orange
+          gradient.addColorStop(this.gradientStops[1], this.gradientColors[1]) // Gold
+          gradient.addColorStop(this.gradientStops[2], this.gradientColors[2]) // Deep pink
+
+          // Apply the gradient to the canvas
+          ctx.fillStyle = gradient
+          ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+          // Create a texture from the canvas
+          this.gradientTexture = new CanvasTexture(canvas)
+          this.gradientTexture.mapping = EquirectangularReflectionMapping
+          this.gradientTexture.minFilter = LinearFilter
+          this.gradientTexture.needsUpdate = true
         }
         if (this.groundProjectedSkybox?.parent) {
           this.groundProjectedSkybox.removeFromParent()
@@ -248,6 +289,22 @@ export class BG_ENV {
 
           case BG_OPTIONS.Color: {
             this.scene.background = this.bgColor
+            break
+          }
+
+          case BG_OPTIONS.Gradient: {
+            this.scene.background = this.gradientTexture
+            break
+          }
+
+          case BG_OPTIONS.GradientProj: {
+            this.initSkyBox()
+            this.groundProjectedSkybox.height = 2
+            this.groundProjectedSkybox.radius = 100
+            this.groundProjectedSkybox.material.uniforms.map.value = this.gradientTexture
+            this.scene.background = null
+            this.scene.add(this.groundProjectedSkybox)
+
             break
           }
 
@@ -297,6 +354,13 @@ export class BG_ENV {
 
       resolve()
     })
+  }
+
+  initSkyBox() {
+    if (!this.groundProjectedSkybox) {
+      this.groundProjectedSkybox = new GroundProjectedSkybox(this.gradientTexture || this.bgTexture)
+      this.groundProjectedSkybox.scale.setScalar(100)
+    }
   }
 
   /**

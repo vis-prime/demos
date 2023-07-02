@@ -96,7 +96,7 @@ export default async function CausticsDemo(mainGui) {
   controls.enableDamping = true // an animation loop is required when either damping or auto-rotation are enabled
   controls.dampingFactor = 0.05
   controls.minDistance = 0.1
-  controls.maxDistance = 50
+  controls.maxDistance = 45
   controls.maxPolarAngle = Math.PI / 1.5
   controls.target.set(0, 1, 0)
 
@@ -107,11 +107,11 @@ export default async function CausticsDemo(mainGui) {
     }
   })
 
+  const clampMin = new Vector3(-2, 0.5, -2)
+  const clampMax = new Vector3(2, 3, 2)
   transformControls.addEventListener("change", () => {
     if (transformControls.object) {
-      if (transformControls.object.position.y < 0) {
-        transformControls.object.position.y = 0
-      }
+      transformControls.object.position.clamp(clampMin, clampMax)
     }
   })
   scene.add(transformControls)
@@ -135,7 +135,7 @@ export default async function CausticsDemo(mainGui) {
   bg_env.sunEnabled = false
   bg_env.shadowFloorEnabled = true
   bg_env.setEnvType("HDRI")
-  bg_env.setBGType("Color")
+  bg_env.setBGType("GradientProj")
   bg_env.bgColor.set("#0d111c")
   bg_env.bgColor.convertLinearToSRGB()
   bg_env.addGui(sceneGui)
@@ -186,7 +186,6 @@ function render() {
   stats.update()
   update()
   controls.update()
-  // if (params.model) caustics.update()
   renderer.render(scene, camera)
 }
 
@@ -247,12 +246,6 @@ const ModelData = {
     model: null,
     hdri: HDRI_LIST.round_platform,
   },
-  Pots: {
-    name: MODEL_LIST.pots.name,
-    url: MODEL_LIST.pots.url,
-    model: null,
-    hdri: HDRI_LIST.round_platform,
-  },
 }
 const params = {
   model: ModelData.Aztec,
@@ -289,7 +282,7 @@ async function setupModels() {
   caustics = Caustics(renderer, {
     frames: Infinity,
     resolution: 2048,
-    worldRadius: 0.0011,
+    worldRadius: 0.003,
     ior: 1.01,
     lightSource: sunLight,
   })
@@ -358,7 +351,6 @@ async function setupModels() {
       }
 
       exposureEntryTween.start()
-      caustics.update()
     }, 100)
 
     if (modelFolder) modelFolder.destroy()
@@ -375,99 +367,9 @@ async function setupModels() {
       // }
     })
 
-    const test = {
-      fit: () => {
-        fitModelInViewport(model)
-      },
-    }
-    modelFolder.add(test, "fit")
-
-    // for (const mat of Object.values(transmissionMaterials)) {
-    //   const mFol = modelFolder.addFolder(mat.name)
-
-    //   const texParams = {}
-    //   const texDict = {}
-    //   for (const key of Object.keys(mat)) {
-    //     if (mat[key]?.isTexture) {
-    //       texDict[key] = mat[key]
-    //       texParams[key] = true
-    //     }
-    //   }
-
-    //   function makeTextureToggleButton(gui, channel) {
-    //     if (texParams[channel])
-    //       gui.add(texParams, channel).onChange((v) => {
-    //         mat[channel] = v ? texDict[channel] : null
-    //         mat.needsUpdate = true
-    //         console.log(channel, v)
-    //       })
-    //   }
-
-    //   console.log({ texParams, texDict })
-    //   console.log("mat", mat)
-
-    //   mFol.addColor(mat, "color")
-
-    //   mFol.add(mat, "roughness", 0, 1)
-    //   makeTextureToggleButton(mFol, "roughnessMap")
-    //   mFol.add(mat, "metalness", 0, 1)
-    //   makeTextureToggleButton(mFol, "metalnessMap")
-
-    //   mFol.add(mat, "aoMapIntensity", 0, 1)
-    //   makeTextureToggleButton(mFol, "aoMap")
-    //   makeTextureToggleButton(mFol, "normalMap")
-
-    //   if (mat.isMeshPhysicalMaterial) {
-    //     console.log({ mat })
-    //     mFol.open()
-    //     const tFol = mFol.addFolder("Transmission stuff")
-    //     tFol.add(mat, "transmission", 0, 1)
-    //     makeTextureToggleButton(tFol, "transmissionMap")
-    //     tFol.add(mat, "thickness", 0, 10)
-    //     makeTextureToggleButton(tFol, "thicknessMap")
-    //     tFol.addColor(mat, "attenuationColor")
-    //     tFol.add(mat, "attenuationDistance", 0, 1)
-    //     tFol.add(mat, "reflectivity", 0, 1)
-    //     const cFol = mFol.addFolder("Clearcoat stuff")
-    //     cFol.add(mat, "clearcoat", 0, 1)
-    //     cFol.add(mat, "clearcoatRoughness", 0, 1)
-
-    //     const sFol = mFol.addFolder("Sheen stuff")
-    //     sFol.add(mat, "sheen", 0, 1)
-    //     sFol.add(mat, "sheenRoughness", 0, 1)
-    //     sFol.addColor(mat, "sheenColor")
-
-    //     const spFol = mFol.addFolder("Specular stuff")
-    //     spFol.add(mat, "specularIntensity", 0, 1)
-    //     spFol.addColor(mat, "specularColor")
-
-    //     const iFol = mFol.addFolder("Iridescence stuff")
-    //     iFol.add(mat, "iridescence", 0, 1)
-    //     iFol.add(mat, "iridescenceIOR", 0, 3)
-    //     // iFol.add(mat.iridescenceThicknessRange, "0")
-    //     iFol.add(mat.iridescenceThicknessRange, "1", 0, 1000).name("Range[1]")
-
-    //     const aFol = mFol.addFolder("Anisotropy stuff")
-    //     aFol.add(mat, "anisotropy", 0, 1)
-    //     aFol.add(mat, "anisotropyRotation", 0, 2 * Math.PI)
-    //     if (!mat.anisotropyMap) {
-    //       mat.anisotropyMap = anisoTexture
-    //       mat.needsUpdate = true
-    //       texDict.anisotropyMap = mat.anisotropyMap
-    //       texParams.anisotropyMap = true
-    //     }
-    //     const anisoTween = new Tween(mat).to({ anisotropyRotation: Math.PI * 10 }, 1e4)
-    //     aFol.add(anisoTween, "start")
-    //     aFol
-    //       .add(anisoTexture.repeat, "x", 1, 10)
-    //       .name("texture repeat")
-    //       .onChange((v) => {
-    //         anisoTexture.repeat.setScalar(v)
-    //       })
-    //     console.log("ANISO", mat.anisotropyMap)
-    //     makeTextureToggleButton(aFol, "anisotropyMap")
-    //   }
-    // }
+    caustics.update()
+    caustics.update()
+    caustics.update()
   }
 
   const exposureEntryTween = new Tween(renderer)
@@ -581,7 +483,7 @@ const IntroCurves = {
 
   [MODEL_LIST.crowned_demon.name]: [
     {
-      position: [-0.266634896037906, 0.42199497158512944, -0.24539424865135415],
+      position: [0.266634896037906, 0.42199497158512944, 0.24539424865135415],
       target: [0.027214537757725255, 0.34758996128067343, -0.02477326451882255],
       fov: 149,
       focus: [0, 0, 0],
