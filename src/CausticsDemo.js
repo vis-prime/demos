@@ -33,6 +33,7 @@ import { Easing, Tween, update } from "@tweenjs/tween.js"
 import { HDRI_LIST } from "../hdri/HDRI_LIST"
 import { CurveHandler } from "../helpers/CurveHandler"
 import { Caustics } from "@pmndrs/vanilla"
+import WebXR from "../helpers/webXR"
 let stats,
   renderer,
   raf,
@@ -63,6 +64,8 @@ let curveHandler
  * @type {import("@pmndrs/vanilla").CausticsType}
  */
 let caustics
+
+let webXR
 
 export default async function CausticsDemo(mainGui) {
   gui = mainGui
@@ -147,8 +150,6 @@ export default async function CausticsDemo(mainGui) {
   curveHandler.addGui(gui)
   await setupModels()
 
-  animate()
-
   let lastClickTime = 0
   let lastPointerEvent = null
 
@@ -174,6 +175,11 @@ export default async function CausticsDemo(mainGui) {
 
   const targetElement = app
   targetElement.addEventListener("pointerdown", handlePointerDown)
+
+  webXR = new WebXR(renderer, scene, camera, caustics.group, render, bg_env)
+  webXR.addGui(gui)
+
+  animate()
 }
 
 function onWindowResize() {
@@ -182,16 +188,16 @@ function onWindowResize() {
   renderer.setSize(window.innerWidth, window.innerHeight)
 }
 
-function render() {
+function render(timestamp, frame) {
   stats.update()
   update()
   controls.update()
+  webXR.onFrame(frame)
   renderer.render(scene, camera)
 }
 
 function animate() {
-  raf = requestAnimationFrame(animate)
-  render()
+  renderer.setAnimationLoop(render)
 }
 
 function raycast() {
@@ -258,7 +264,7 @@ async function setupModels() {
   const sunLight = new DirectionalLight()
   sunLight.name = "sun"
   sunLight.castShadow = true
-  sunLight.shadow.camera.near = 0.1
+  sunLight.shadow.camera.near = 0.01
   sunLight.shadow.camera.far = 50
   const size = 10
   sunLight.shadow.camera.right = size
@@ -275,8 +281,12 @@ async function setupModels() {
   scene.add(transformControls)
   transformControls.attach(sunLight)
 
+  let updateTimeout
   transformControls.addEventListener("change", () => {
-    caustics.update()
+    clearTimeout(updateTimeout)
+    updateTimeout = setTimeout(() => {
+      caustics.update()
+    }, 50)
   })
 
   caustics = Caustics(renderer, {
@@ -367,6 +377,7 @@ async function setupModels() {
       }
     })
 
+    // three times the charm
     caustics.update()
     caustics.update()
     caustics.update()
