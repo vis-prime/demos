@@ -104,13 +104,7 @@ export default class WebXR {
 
       let currentSession = null
 
-      let gpParent
       const onSessionStarted = async (session) => {
-        if (this.bgEnv.groundProjectedSkybox.parent) {
-          gpParent = this.bgEnv.groundProjectedSkybox.parent
-          this.bgEnv.groundProjectedSkybox.removeFromParent()
-        }
-
         if (this.onStart) this.onStart()
 
         session.addEventListener("end", onSessionEnded)
@@ -133,10 +127,6 @@ export default class WebXR {
         if (this.onEnd) this.onEnd()
         currentSession = null
         scene.remove(reticle)
-        if (gpParent) {
-          gpParent.add(this.bgEnv.groundProjectedSkybox)
-          gpParent = null
-        }
       }
 
       //

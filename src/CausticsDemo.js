@@ -23,6 +23,10 @@ import {
   DirectionalLight,
   Color,
   DoubleSide,
+  NormalBlending,
+  WebGLRenderTarget,
+  OrthographicCamera,
+  CameraHelper,
 } from "three"
 
 // Model and Env
@@ -36,7 +40,12 @@ import WebXR from "../helpers/webXR"
 import { PlaneGeometry } from "three"
 import { Texture } from "three"
 import { AxesHelper } from "three"
+import { NoToneMapping } from "three"
+import { LinearSRGBColorSpace } from "three"
 let stats,
+  /**
+   * @type {WebGLRenderer}
+   */
   renderer,
   raf,
   camera,
@@ -100,7 +109,7 @@ const params = {
   pixelRatio: 1,
 }
 let sunLight
-let causticsImagePlane
+let causticsImagePlane, causticsRenderPlane
 
 export default async function CausticsDemo(mainGui) {
   gui = mainGui
@@ -146,13 +155,6 @@ export default async function CausticsDemo(mainGui) {
     }
   })
 
-  const clampMin = new Vector3(-2, 0.5, -2)
-  const clampMax = new Vector3(2, 3, 2)
-  transformControls.addEventListener("change", () => {
-    if (transformControls.object) {
-      transformControls.object.position.clamp(clampMin, clampMax)
-    }
-  })
   scene.add(transformControls)
 
   window.addEventListener("resize", onWindowResize)
@@ -234,40 +236,66 @@ export default async function CausticsDemo(mainGui) {
     .name("Pixel Ratio")
 
   animate()
+
+  let updateTimeout
+  const clampMin = new Vector3(-2, 0.5, -2)
+  const clampMax = new Vector3(2, 3, 2)
+  transformControls.addEventListener("change", () => {
+    if (transformControls.object && !controls.enabled) {
+      transformControls.object.position.clamp(clampMin, clampMax)
+      clearTimeout(updateTimeout)
+      updateTimeout = setTimeout(() => {
+        caustics.update()
+        console.log({ causticsRenderPlane })
+      }, 50)
+    }
+  })
 }
+
+let gpParent
 const xrState = async (state) => {
   if (state) {
-    caustics.group.removeFromParent()
-    let orgPlane
-    caustics.group.traverse((n) => {
-      if (n.geometry) {
-        if (n.geometry instanceof PlaneGeometry) {
-          causticsImagePlane = n.clone()
-          orgPlane = n
-        }
-      }
-    })
     const img = await saveCausticsAsImage(caustics)
     const tex = new Texture(img)
-    // tex.flipY = false
-    tex.needsUpdate = true
-    causticsImagePlane.material = new MeshBasicMaterial({ map: tex, side: DoubleSide })
-    causticsImagePlane.scale.y *= -1
-    mainObjects.add(causticsImagePlane)
 
-    orgPlane.getWorldPosition(causticsImagePlane.position)
-    mainObjects.add(params.model.object3d)
-    mainObjects.scale.setScalar(0.1)
+    tex.flipY = false
+    tex.needsUpdate = true
+
+    gui.add(tex, "flipY").onChange(() => {
+      tex.needsUpdate = true
+    })
+    causticsImagePlane.material.map = tex
+    causticsImagePlane.scale.y *= -1
+
+    causticsImagePlane.position.copy(causticsRenderPlane.position)
+    causticsImagePlane.rotation.copy(causticsRenderPlane.rotation)
+    causticsImagePlane.scale.copy(causticsRenderPlane.scale)
 
     transformControls.detach()
+
+    causticsImagePlane.visible = true
+    causticsRenderPlane.visible = false
+
+    mainObjects.add(bg_env.shadowFloor)
+
+    if (bg_env.groundProjectedSkybox.parent) {
+      gpParent = bg_env.groundProjectedSkybox.parent
+      bg_env.groundProjectedSkybox.removeFromParent()
+    }
   } else {
-    mainObjects.add(caustics.group)
-    caustics.scene.add(params.model.object3d)
     mainObjects.position.set(0, 0, 0)
     mainObjects.rotation.set(0, 0, 0)
     mainObjects.scale.set(1, 1, 1)
-    mainObjects.remove(causticsImagePlane)
+    causticsImagePlane.visible = false
+    causticsRenderPlane.visible = true
+
     transformControls.attach(sunLight)
+    scene.add(bg_env.shadowFloor)
+
+    if (gpParent) {
+      gpParent.add(bg_env.groundProjectedSkybox)
+      gpParent = null
+    }
   }
 }
 
@@ -339,19 +367,10 @@ async function setupModels() {
   sunLight.shadow.bias = -0.0005
   sunLight.position.set(2, 3, 2)
   mainObjects.add(sunLight)
-  sunLight.add(new AxesHelper(0.1))
   mainObjects.add(sunLight.target)
 
   scene.add(transformControls)
   transformControls.attach(sunLight)
-
-  let updateTimeout
-  transformControls.addEventListener("change", () => {
-    clearTimeout(updateTimeout)
-    updateTimeout = setTimeout(() => {
-      caustics.update()
-    }, 50)
-  })
 
   caustics = Caustics(renderer, {
     frames: Infinity,
@@ -364,6 +383,26 @@ async function setupModels() {
   gui.add(sunLight.position, "y", -5, 5)
   gui.add(sunLight.position, "z", -5, 5)
 
+  caustics.group.traverse((n) => {
+    if (n.geometry) {
+      if (n.geometry instanceof PlaneGeometry) {
+        causticsRenderPlane = n
+        causticsImagePlane = n.clone()
+        causticsImagePlane.visible = false
+        causticsImagePlane.material = new MeshBasicMaterial({
+          transparent: true,
+          depthTest: true,
+          depthWrite: false,
+          side: DoubleSide,
+        })
+      }
+    }
+  })
+
+  mainObjects.add(causticsImagePlane)
+  gui.add(causticsRenderPlane, "visible").name("Cau")
+  gui.add(causticsImagePlane, "visible").name("IMG")
+  gui.add(causticsImagePlane, "renderOrder", 0, 5).name("IMG Render order")
   // caustics.helper.visible = false // start hidden
   scene.add(caustics.group, caustics.helper)
   caustics.group.position.y = 0.003 // to prevent z-fighting with groundProjectedSkybox
@@ -394,22 +433,30 @@ async function setupModels() {
       bgEnvPromise = bg_env.updateAll()
     }
 
-    const texLoader = new TextureLoader()
-    const anisoTexPromise = texLoader.loadAsync("./textures/aniso.png")
     Object.values(ModelData).forEach((dat) => {
       if (dat.object3d && dat.object3d.parent) {
         dat.object3d.removeFromParent()
       }
     })
 
-    const [anisoTexture] = await Promise.all([anisoTexPromise, modelPromise, bgEnvPromise])
-    anisoTexture.wrapS = anisoTexture.wrapT = RepeatWrapping
+    await Promise.all([modelPromise, bgEnvPromise])
+
     model = data.object3d
 
     mainObjects.add(model)
     scene.add(bg_env.shadowFloor)
+    bg_env.shadowFloor.material.depthWrite = false
+    bg_env.shadowFloor.material.depthTest = true
+    bg_env.shadowFloor.material.needsUpdate = true
 
-    console.log({ data })
+    gui.add(bg_env.shadowFloor, "renderOrder", 0, 5, 1)
+    gui.add(bg_env.shadowFloor.position, "y", -0.2, 0.2)
+    // console.log({ data })
+
+    // three times the charm
+    caustics.update()
+    caustics.update()
+    caustics.update()
     renderer.compile(scene, camera)
     setTimeout(() => {
       if (IntroCurves[data.name]) {
@@ -444,11 +491,6 @@ async function setupModels() {
         transmissionMaterials[node.material.uuid] = node.material
       }
     })
-
-    // three times the charm
-    caustics.update()
-    caustics.update()
-    caustics.update()
   }
 
   const exposureEntryTween = new Tween(renderer)
@@ -626,7 +668,7 @@ const IntroExtras = {
       instancedParticles = new InstancedMesh(geo, mat, 1000)
       const matrix = new Matrix4()
       const randomScale = new Vector3()
-      console.log(instancedParticles)
+      // console.log(instancedParticles)
       for (let index = 0; index < instancedParticles.count; index++) {
         matrix.identity()
 
@@ -665,10 +707,41 @@ function saveCausticsAsImage(caustics) {
     const renderTarget = caustics.causticsTarget
     const width = renderTarget.width
     const height = renderTarget.height
-    console.log(renderTarget)
-    const pixels = new Float32Array(width * height * 4)
-    renderer.readRenderTargetPixels(renderTarget, 0, 0, width, height, pixels)
+
+    const size = 0.5
+    const cCam = new OrthographicCamera(-size, size, size, -size, 0.1, 10)
+
+    cCam.rotation.set(-Math.PI / 2, 0, 0)
+    const copyPlane = causticsRenderPlane
+    cCam.position.copy(copyPlane.position)
+    cCam.position.y += 1
+
+    const pScale = causticsRenderPlane.scale.x
+    cCam.left = -pScale / 2
+    cCam.right = pScale / 2
+    cCam.top = pScale / 2
+    cCam.bottom = -pScale / 2
+    cCam.updateProjectionMatrix()
+    cCam.updateMatrixWorld()
+
+    // scene.add(new CameraHelper(cCam))
+
+    const customRT = new WebGLRenderTarget(width, height, { colorSpace: SRGBColorSpace })
+    const oldTone = renderer.toneMapping
+    renderer.toneMapping = NoToneMapping
+    const oldPX = renderer.getPixelRatio()
+    renderer.setPixelRatio(1)
+    renderer.setRenderTarget(customRT)
+    renderer.render(causticsRenderPlane, cCam)
+    renderer.setRenderTarget(null)
+    renderer.setPixelRatio(oldPX)
+    renderer.toneMapping = oldTone
+
     const shadowColor = caustics.params.color
+
+    // Read pixel data from the render target
+    const pixels = new Uint8ClampedArray(customRT.width * customRT.height * 4)
+    renderer.readRenderTargetPixels(customRT, 0, 0, customRT.width, customRT.height, pixels)
 
     let min = 100000,
       max = 0
@@ -682,14 +755,19 @@ function saveCausticsAsImage(caustics) {
     console.log({ min, max })
     for (let i = 0; i < pixels.length; i += 4) {
       color.fromArray(pixels, i)
-      const diffuse = color.r
 
       // const alphaValue = invertedValue * alphaScale
 
-      color.setRGB(diffuse * shadowColor.r, diffuse * shadowColor.g, diffuse * shadowColor.b)
-      color.convertLinearToSRGB()
+      // color.setRGB(diffuse * shadowColor.r, diffuse * shadowColor.g, diffuse * shadowColor.b)
+      // color.convertLinearToSRGB()
+
       color.toArray(pixels, i)
-      pixels[i + 3] = 1 //MathUtils.mapLinear(diffuse, min, max, 0, 1)
+      // color.convertSRGBToLinear()
+      // color.convertLinearToSRGB()
+
+      const diffuse = color.r
+
+      pixels[i + 3] = diffuse //MathUtils.mapLinear(diffuse, min, max, 0, 255)
     }
 
     if (!uint8ClampedArray || uint8ClampedArray.length !== pixels.length) {
@@ -697,7 +775,7 @@ function saveCausticsAsImage(caustics) {
     }
 
     for (let i = 0; i < pixels.length; i++) {
-      uint8ClampedArray[i] = Math.round(pixels[i] * 255)
+      uint8ClampedArray[i] = pixels[i] // Math.round(pixels[i] * 255)
     }
 
     console.log({ uint8ClampedArray })
@@ -724,6 +802,7 @@ function saveCausticsAsImage(caustics) {
 
     // Simulate a click on the anchor element to download the image
     // link.click()
+
     const imag = new Image()
     imag.src = pngUrl
     await imag.decode()
