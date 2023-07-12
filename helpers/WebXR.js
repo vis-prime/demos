@@ -9,6 +9,9 @@ import {
   RingGeometry,
   WebGLRenderer,
 } from "three"
+/**
+ * @type {Mesh}
+ */
 let reticle
 
 let hitTestSource = null
@@ -21,7 +24,7 @@ export default class WebXR {
    * @param {Object3D} object
    * @param {Function} originalRenderFunction
    */
-  constructor(renderer, scene, camera, object, originalRenderFunction, bgEnv) {
+  constructor(renderer, scene, camera, object, originalRenderFunction, bgEnv, { onStart, onEnd }) {
     this.renderer = renderer
     this.scene = scene
     this.camera = camera
@@ -29,6 +32,8 @@ export default class WebXR {
     this.xrReady = false
     this.xrObject = object
     this.bgEnv = bgEnv
+    this.onStart = onStart
+    this.onEnd = onEnd
     this.init()
   }
 
@@ -37,14 +42,17 @@ export default class WebXR {
     const scene = this.scene
 
     const geometry = new CylinderGeometry(0.1, 0.1, 0.2, 32).translate(0, 0.1, 0)
-
-    function onSelect() {
+    const dummyMesh = new Mesh()
+    const onSelect = () => {
       if (reticle.visible) {
-        const material = new MeshPhongMaterial({ color: 0xffffff * Math.random() })
-        const mesh = new Mesh(geometry, material)
-        reticle.matrix.decompose(mesh.position, mesh.quaternion, mesh.scale)
-        mesh.scale.y = Math.random() * 2 + 1
-        scene.add(mesh)
+        // const material = new MeshPhongMaterial({ color: 0xffffff * Math.random() })
+        // const mesh = new Mesh(geometry, material)
+        const mesh = this.xrObject
+        reticle.matrix.decompose(mesh.position, dummyMesh.quaternion, dummyMesh.scale)
+
+        // mesh.scale.y = Math.random() * 2 + 1
+
+        // scene.add(mesh)
       }
     }
 
@@ -55,7 +63,6 @@ export default class WebXR {
     reticle = new Mesh(new RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2), new MeshBasicMaterial())
     reticle.matrixAutoUpdate = false
     reticle.visible = false
-    scene.add(reticle)
 
     const sessionInit = { requiredFeatures: ["hit-test"] }
     const button = document.createElement("button")
@@ -104,6 +111,8 @@ export default class WebXR {
           this.bgEnv.groundProjectedSkybox.removeFromParent()
         }
 
+        if (this.onStart) this.onStart()
+
         session.addEventListener("end", onSessionEnded)
 
         renderer.xr.setReferenceSpaceType("local")
@@ -112,7 +121,7 @@ export default class WebXR {
 
         button.textContent = "STOP AR"
         sessionInit.domOverlay.root.style.display = ""
-
+        scene.add(reticle)
         currentSession = session
       }
 
@@ -121,9 +130,9 @@ export default class WebXR {
 
         button.textContent = "START AR"
         sessionInit.domOverlay.root.style.display = "none"
-
+        if (this.onEnd) this.onEnd()
         currentSession = null
-
+        scene.remove(reticle)
         if (gpParent) {
           gpParent.add(this.bgEnv.groundProjectedSkybox)
           gpParent = null
@@ -253,11 +262,6 @@ export default class WebXR {
 
           reticle.visible = true
           reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix)
-          // this.xrObject.matrix.copy(reticle.matrix)
-
-          reticle.matrix.decompose(reticle.position, reticle.quaternion, reticle.scale)
-
-          console.log(reticle.position, reticle.matrix.get)
         } else {
           reticle.visible = false
         }

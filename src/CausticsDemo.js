@@ -16,14 +16,13 @@ import {
   MathUtils,
   SphereGeometry,
   MeshBasicMaterial,
-  Mesh,
   InstancedMesh,
   Matrix4,
   TextureLoader,
   RepeatWrapping,
-  MeshPhysicalMaterial,
-  TorusKnotGeometry,
   DirectionalLight,
+  Color,
+  DoubleSide,
 } from "three"
 
 // Model and Env
@@ -34,6 +33,9 @@ import { HDRI_LIST } from "../hdri/HDRI_LIST"
 import { CurveHandler } from "../helpers/CurveHandler"
 import { Caustics } from "@pmndrs/vanilla"
 import WebXR from "../helpers/webXR"
+import { PlaneGeometry } from "three"
+import { Texture } from "three"
+import { AxesHelper } from "three"
 let stats,
   renderer,
   raf,
@@ -67,11 +69,45 @@ let caustics
 
 let webXR
 
+const ModelData = {
+  Aztec: {
+    name: MODEL_LIST.aztec.name,
+    url: MODEL_LIST.aztec.url,
+    object3d: null,
+    hdri: HDRI_LIST.wide_street2,
+  },
+  Demon: {
+    name: MODEL_LIST.crowned_demon.name,
+    url: MODEL_LIST.crowned_demon.url,
+    object3d: null,
+    hdri: HDRI_LIST.wide_street1,
+  },
+  Cat: {
+    name: MODEL_LIST.cat.name,
+    url: MODEL_LIST.cat.url,
+    object3d: null,
+    hdri: HDRI_LIST.dancing_hall,
+  },
+  Mourner: {
+    name: MODEL_LIST.mourner.name,
+    url: MODEL_LIST.mourner.url,
+    object3d: null,
+    hdri: HDRI_LIST.round_platform,
+  },
+}
+const params = {
+  model: ModelData.Aztec,
+  pixelRatio: 1,
+}
+let sunLight
+let causticsImagePlane
+
 export default async function CausticsDemo(mainGui) {
   gui = mainGui
   sceneGui = gui.addFolder("Scene")
   stats = new Stats()
   app.appendChild(stats.dom)
+
   // renderer
   renderer = new WebGLRenderer({ antialias: true })
   renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio))
@@ -81,7 +117,7 @@ export default async function CausticsDemo(mainGui) {
   renderer.outputColorSpace = SRGBColorSpace
   renderer.toneMapping = ACESFilmicToneMapping
   renderer.toneMappingExposure = 0
-
+  params.pixelRatio = renderer.getPixelRatio()
   app.appendChild(renderer.domElement)
 
   // camera
@@ -147,6 +183,7 @@ export default async function CausticsDemo(mainGui) {
 
   curveHandler = new CurveHandler(scene, camera, controls, renderer)
   curveHandler.playBackTween.duration(2000)
+  curveHandler.playBackTween.easing(Easing.Exponential.Out)
   curveHandler.addGui(gui)
   await setupModels()
 
@@ -176,10 +213,62 @@ export default async function CausticsDemo(mainGui) {
   const targetElement = app
   targetElement.addEventListener("pointerdown", handlePointerDown)
 
-  webXR = new WebXR(renderer, scene, camera, caustics.group, render, bg_env)
+  webXR = new WebXR(renderer, scene, camera, mainObjects, render, bg_env, {
+    onStart: async () => {
+      xrState(true)
+    },
+    onEnd: () => {
+      xrState(false)
+    },
+  })
   webXR.addGui(gui)
 
+  gui.add(webXR, "onStart")
+  gui.add(webXR, "onEnd")
+
+  gui
+    .add(params, "pixelRatio", 0.3, window.devicePixelRatio * 4)
+    .onChange((v) => {
+      renderer.setPixelRatio(v)
+    })
+    .name("Pixel Ratio")
+
   animate()
+}
+const xrState = async (state) => {
+  if (state) {
+    caustics.group.removeFromParent()
+    let orgPlane
+    caustics.group.traverse((n) => {
+      if (n.geometry) {
+        if (n.geometry instanceof PlaneGeometry) {
+          causticsImagePlane = n.clone()
+          orgPlane = n
+        }
+      }
+    })
+    const img = await saveCausticsAsImage(caustics)
+    const tex = new Texture(img)
+    // tex.flipY = false
+    tex.needsUpdate = true
+    causticsImagePlane.material = new MeshBasicMaterial({ map: tex, side: DoubleSide })
+    causticsImagePlane.scale.y *= -1
+    mainObjects.add(causticsImagePlane)
+
+    orgPlane.getWorldPosition(causticsImagePlane.position)
+    mainObjects.add(params.model.object3d)
+    mainObjects.scale.setScalar(0.1)
+
+    transformControls.detach()
+  } else {
+    mainObjects.add(caustics.group)
+    caustics.scene.add(params.model.object3d)
+    mainObjects.position.set(0, 0, 0)
+    mainObjects.rotation.set(0, 0, 0)
+    mainObjects.scale.set(1, 1, 1)
+    mainObjects.remove(causticsImagePlane)
+    transformControls.attach(sunLight)
+  }
 }
 
 function onWindowResize() {
@@ -190,6 +279,7 @@ function onWindowResize() {
 
 function render(timestamp, frame) {
   stats.update()
+
   update()
   controls.update()
   webXR.onFrame(frame)
@@ -227,41 +317,12 @@ function onPointerMove(event) {
   pointer.y = -(event.clientY / window.innerHeight) * 2 + 1
 }
 
-const ModelData = {
-  Aztec: {
-    name: MODEL_LIST.aztec.name,
-    url: MODEL_LIST.aztec.url,
-    model: null,
-    hdri: HDRI_LIST.wide_street2,
-  },
-  Demon: {
-    name: MODEL_LIST.crowned_demon.name,
-    url: MODEL_LIST.crowned_demon.url,
-    model: null,
-    hdri: HDRI_LIST.wide_street1,
-  },
-  Cat: {
-    name: MODEL_LIST.cat.name,
-    url: MODEL_LIST.cat.url,
-    model: null,
-    hdri: HDRI_LIST.dancing_hall,
-  },
-  Mourner: {
-    name: MODEL_LIST.mourner.name,
-    url: MODEL_LIST.mourner.url,
-    model: null,
-    hdri: HDRI_LIST.round_platform,
-  },
-}
-const params = {
-  model: ModelData.Aztec,
-}
 async function setupModels() {
   const folder = gui.addFolder("Caus")
   folder.open()
   let modelFolder
 
-  const sunLight = new DirectionalLight()
+  sunLight = new DirectionalLight()
   sunLight.name = "sun"
   sunLight.castShadow = true
   sunLight.shadow.camera.near = 0.01
@@ -277,7 +338,10 @@ async function setupModels() {
   sunLight.shadow.blurSamples = 6
   sunLight.shadow.bias = -0.0005
   sunLight.position.set(2, 3, 2)
-  scene.add(sunLight)
+  mainObjects.add(sunLight)
+  sunLight.add(new AxesHelper(0.1))
+  mainObjects.add(sunLight.target)
+
   scene.add(transformControls)
   transformControls.attach(sunLight)
 
@@ -291,14 +355,17 @@ async function setupModels() {
 
   caustics = Caustics(renderer, {
     frames: Infinity,
-    resolution: 2048,
+    resolution: 2048, // 128,
     worldRadius: 0.003,
     ior: 1.01,
     lightSource: sunLight,
   })
-  caustics.helper.visible = false // start hidden
-  scene.add(caustics.group, caustics.helper)
+  gui.add(sunLight.position, "x", -5, 5)
+  gui.add(sunLight.position, "y", -5, 5)
+  gui.add(sunLight.position, "z", -5, 5)
 
+  // caustics.helper.visible = false // start hidden
+  scene.add(caustics.group, caustics.helper)
   caustics.group.position.y = 0.003 // to prevent z-fighting with groundProjectedSkybox
   caustics.scene.add(mainObjects)
 
@@ -312,9 +379,9 @@ async function setupModels() {
     const data = params.model
     let model, modelPromise
 
-    if (!data.model) {
+    if (!data.object3d) {
       modelPromise = MODEL_LOADER(data.url).then((gltf) => {
-        data.model = gltf.scene
+        data.object3d = gltf.scene
       })
     }
 
@@ -330,19 +397,20 @@ async function setupModels() {
     const texLoader = new TextureLoader()
     const anisoTexPromise = texLoader.loadAsync("./textures/aniso.png")
     Object.values(ModelData).forEach((dat) => {
-      if (dat.model && dat.model.parent) {
-        dat.model.removeFromParent()
+      if (dat.object3d && dat.object3d.parent) {
+        dat.object3d.removeFromParent()
       }
     })
 
     const [anisoTexture] = await Promise.all([anisoTexPromise, modelPromise, bgEnvPromise])
     anisoTexture.wrapS = anisoTexture.wrapT = RepeatWrapping
-    model = data.model
+    model = data.object3d
 
     mainObjects.add(model)
+    scene.add(bg_env.shadowFloor)
 
-    await renderer.compile(scene, camera)
-
+    console.log({ data })
+    renderer.compile(scene, camera)
     setTimeout(() => {
       if (IntroCurves[data.name]) {
         //first camera use current pos
@@ -361,7 +429,7 @@ async function setupModels() {
       }
 
       exposureEntryTween.start()
-    }, 100)
+    }, 1000)
 
     if (modelFolder) modelFolder.destroy()
     modelFolder = folder.addFolder(data.name)
@@ -439,6 +507,13 @@ function addCausticsGui(caustics) {
     folder.add(caustics.params.lightSource, "y", 0.1, 1).name("lightSource Y")
     folder.add(caustics.params.lightSource, "z", -1, 1).name("lightSource Z")
   }
+
+  const dd = {
+    save: () => {
+      saveCausticsAsImage(caustics)
+    },
+  }
+  folder.add(dd, "save")
 }
 
 const bbox = new Box3()
@@ -478,12 +553,11 @@ function fitModelInViewport(model) {
 const IntroCurves = {
   [MODEL_LIST.aztec.name]: [
     {
-      position: [3.3071321443089925, 1.388944390019785, 3.307132144799106],
-      target: [-1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8],
+      position: [3.492476212598207, 1.7745950899766019, 3.0546168261189015],
+      target: [1.2047652721505173, -1.8582742974919984, 0.645046189318744],
       fov: 90,
       focus: [0, 0, 0],
     },
-
     {
       position: [0.5324308158242546, 1.3889240952517157, 4.527657651483493],
       target: [-1.4641092949130297e-8, 1.3889443900197849, -1.942840813229374e-8],
@@ -572,4 +646,87 @@ const IntroExtras = {
     particleTween.start()
     scene.add(instancedParticles)
   },
+}
+
+let canvas
+let uint8ClampedArray
+let color
+/**
+ * Save Shadows as As Image
+ * @param {import("@pmndrs/vanilla").CausticsType} caustics
+ */
+function saveCausticsAsImage(caustics) {
+  return new Promise(async (resolve, reject) => {
+    if (!canvas) {
+      canvas = document.createElement("canvas")
+      color = new Color()
+    }
+
+    const renderTarget = caustics.causticsTarget
+    const width = renderTarget.width
+    const height = renderTarget.height
+    console.log(renderTarget)
+    const pixels = new Float32Array(width * height * 4)
+    renderer.readRenderTargetPixels(renderTarget, 0, 0, width, height, pixels)
+    const shadowColor = caustics.params.color
+
+    let min = 100000,
+      max = 0
+    for (let i = 0; i < pixels.length; i += 4) {
+      min = Math.min(min, pixels[i])
+      max = Math.max(max, pixels[i])
+    }
+
+    const range = max - min
+    const alphaScale = 1 / range
+    console.log({ min, max })
+    for (let i = 0; i < pixels.length; i += 4) {
+      color.fromArray(pixels, i)
+      const diffuse = color.r
+
+      // const alphaValue = invertedValue * alphaScale
+
+      color.setRGB(diffuse * shadowColor.r, diffuse * shadowColor.g, diffuse * shadowColor.b)
+      color.convertLinearToSRGB()
+      color.toArray(pixels, i)
+      pixels[i + 3] = 1 //MathUtils.mapLinear(diffuse, min, max, 0, 1)
+    }
+
+    if (!uint8ClampedArray || uint8ClampedArray.length !== pixels.length) {
+      uint8ClampedArray = new Uint8ClampedArray(pixels.length)
+    }
+
+    for (let i = 0; i < pixels.length; i++) {
+      uint8ClampedArray[i] = Math.round(pixels[i] * 255)
+    }
+
+    console.log({ uint8ClampedArray })
+    // setup canvas to draw the image data onto
+    canvas.width = width
+    canvas.height = height
+
+    // Draw the image data onto the canvas
+    const context = canvas.getContext("2d")
+    const imageData = new ImageData(uint8ClampedArray, width, height)
+    context.putImageData(imageData, 0, 0)
+
+    // Create a data URL for the image
+    const pngUrl = canvas.toDataURL("image/png")
+
+    // Create a new anchor element
+    // const link = document.createElement("a")
+
+    // Set the href attribute of the anchor element to the PNG data URL
+    // link.href = pngUrl
+
+    // Set the download attribute of the anchor element to the desired file name
+    // link.download = "caustics.png"
+
+    // Simulate a click on the anchor element to download the image
+    // link.click()
+    const imag = new Image()
+    imag.src = pngUrl
+    await imag.decode()
+    resolve(imag)
+  })
 }
