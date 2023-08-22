@@ -38,5 +38,7 @@ if (Object.keys(Demos).includes(window.location.hash.substring(1))) {
   params.demo = window.location.hash.substring(1)
   window.location.href = `https://three-demos.vercel.app/#${params.demo}`
 } else {
-  HomeDemo()
+  window.location.href = "https://three-demos.vercel.app/#Home"
 }
+
+HomeDemo()
